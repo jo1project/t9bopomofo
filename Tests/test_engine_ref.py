@@ -213,12 +213,63 @@ def test_success_phrase():
     print("success_phrase OK", t9)
 
 
+def test_bushixing_vs_buxing():
+    """不是不行 vs 不是不幸 share T9; tone-2 on last syllable must prefer 行."""
+    entries = []
+    for name in ("taiwan_phrases.dict.yaml", "bopomofo_t9.dict.yaml"):
+        entries.extend(parse_dict(DICT / name))
+    digits = encode_reading("bu2 shi4 bu4 xing2")
+    digits_xing4 = encode_reading("bu2 shi4 bu2 xing4")
+    assert digits == digits_xing4, (digits, digits_xing4)
+
+    by_word = {w: (r, t9, wt) for w, r, t9, wt in entries if w in ("不是不行", "不是不幸", "不行", "不幸")}
+    assert "不是不行" in by_word, by_word.keys()
+    assert "不行" in by_word
+
+    # Simulate ranking: exact phrase + last tone w (2nd)
+    def tone_bonus(tones: str, wanted: str) -> float:
+        have = [c for c in tones if c != "-"]
+        bonus = 0.0
+        for offset, w in enumerate(reversed(wanted)):
+            if offset >= len(have):
+                bonus -= 150
+                continue
+            h = have[len(have) - 1 - offset]
+            bonus += 900 if w == h else -700
+        return bonus
+
+    # Build tones from readings
+    def tones_of(reading: str) -> str:
+        out = ""
+        for part in reading.split():
+            _, t = encode_syllable(part)
+            out += t or "-"
+        return out
+
+    cands = []
+    for w, r, t9, wt in entries:
+        if t9 != digits:
+            continue
+        score = wt + 800 + tone_bonus(tones_of(r), "w")
+        cands.append((score, w, r))
+    cands.sort(reverse=True)
+    assert cands, "no candidates"
+    top = [w for _, w, _ in cands[:5]]
+    assert "不是不行" in top or top[0].endswith("行"), top
+    # 不幸 / 不是不幸 must rank below 行 variants when 2nd tone applied
+    best_xing = max((s for s, w, _ in cands if "行" in w), default=-1e9)
+    best_xing4 = max((s for s, w, _ in cands if "幸" in w), default=-1e9)
+    assert best_xing > best_xing4, (best_xing, best_xing4, top)
+    print("bushixing OK", digits, "top", top[:3])
+
+
 def main() -> int:
     test_encode_samples()
     test_dict_contains_targets()
     test_fuzzy_neighbor_and_missing()
     test_clear_on_symbol_behavior()
     test_success_phrase()
+    test_bushixing_vs_buxing()
     print("ALL PASSED")
     return 0
 

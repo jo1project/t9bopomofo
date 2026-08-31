@@ -29,7 +29,7 @@ final class KeyboardViewController: UIInputViewController {
             candidateBar.topAnchor.constraint(equalTo: view.topAnchor, constant: 4),
             candidateBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 4),
             candidateBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -4),
-            candidateBar.heightAnchor.constraint(equalToConstant: 40),
+            candidateBar.heightAnchor.constraint(equalToConstant: 36),
 
             keyboardContainer.topAnchor.constraint(equalTo: candidateBar.bottomAnchor, constant: 4),
             keyboardContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 3),
@@ -37,10 +37,13 @@ final class KeyboardViewController: UIInputViewController {
             keyboardContainer.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -3),
         ])
 
-        let hc = view.heightAnchor.constraint(equalToConstant: 280)
-        hc.priority = .defaultHigh
+        let hc = view.heightAnchor.constraint(equalToConstant: 290)
+        hc.priority = .required
         hc.isActive = true
         heightConstraint = hc
+
+        // Candidate bar slightly tighter so 4 key rows get Hamster-like height
+        // (constraints already set above)
 
         candidateBar.onSelect = { [weak self] candidate in
             guard let self else { return }

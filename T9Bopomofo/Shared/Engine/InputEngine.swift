@@ -23,7 +23,6 @@ final class InputEngine: ObservableObject {
             try lexicon.loadFromBundle(bundle: bundle)
             loaded = true
         } catch {
-            // Fallback: try relative paths for unit tests / previews
             let fm = FileManager.default
             let candidates = [
                 URL(fileURLWithPath: "Resources/rime"),
@@ -58,12 +57,16 @@ final class InputEngine: ObservableObject {
     }
 
     func tapTone(_ tone: Character) {
-        // Tone applies to current unfinished syllable loosely: append marker for ranking.
+        // Tone applies to the *current last syllable* (replace if already set for that slot).
+        if composingTones.count >= syllableEstimate(for: composingDigits) {
+            if !composingTones.isEmpty {
+                composingTones.removeLast()
+            }
+        }
         composingTones.append(tone)
         refreshCandidates()
     }
 
-    /// Long-press exact zhuyin token (schema letter) → append its T9 key AND bias ranking.
     func tapExactToken(_ token: Character) {
         if let key = T9KeyMap.tokenToKey[token] {
             composingDigits.append(key)
@@ -87,13 +90,11 @@ final class InputEngine: ObservableObject {
         preeditDisplay = ""
     }
 
-    /// Confirm a candidate (explicit tap on candidate bar).
     func selectCandidate(_ candidate: Candidate) -> String {
         let text = candidate.text
         userLexicon.recordCommit(text, previous: lastCommitted.isEmpty ? nil : lastCommitted)
         lastCommitted = text
         clearComposing()
-        // After commit, show predictions
         let preds = userLexicon.predictions(after: text)
         candidates = preds.enumerated().map { idx, w in
             Candidate(id: "pred-\(idx)-\(w)", text: w, reading: "", score: 1000 - Double(idx), source: .prediction)
@@ -101,24 +102,14 @@ final class InputEngine: ObservableObject {
         return text
     }
 
-    /// Space / symbol / return: insert char, clear composing WITHOUT committing first candidate.
     func insertPassthroughAndClear(_ text: String) -> String {
         clearComposing()
-        // Keep lastCommitted for context; passthrough is not a word commit.
         return text
     }
 
-    func handleSpace() -> String {
-        insertPassthroughAndClear(" ")
-    }
-
-    func handleReturn() -> String {
-        insertPassthroughAndClear("\n")
-    }
-
-    func handleSymbol(_ symbol: String) -> String {
-        insertPassthroughAndClear(symbol)
-    }
+    func handleSpace() -> String { insertPassthroughAndClear(" ") }
+    func handleReturn() -> String { insertPassthroughAndClear("\n") }
+    func handleSymbol(_ symbol: String) -> String { insertPassthroughAndClear(symbol) }
 
     // MARK: - Ranking
 
@@ -141,29 +132,31 @@ final class InputEngine: ObservableObject {
 
         var scored: [Candidate] = []
 
-        // Whole-buffer phrase / greedy segmentation (連打)
         if let phrase = PhraseSegmenter.bestPhrase(digits: composingDigits, lexicon: lexicon) {
+            let toneBonus = toneScore(tones: phrase.tones)
             let userBoost = userLexicon.boost(for: phrase.word, previous: lastCommitted.isEmpty ? nil : lastCommitted)
             scored.append(
                 Candidate(
                     id: "ph-\(phrase.word)-\(phrase.reading)",
                     text: phrase.word,
                     reading: phrase.reading,
-                    score: Double(phrase.weight) + 500 + userBoost,
+                    score: Double(phrase.weight) + 800 + toneBonus + userBoost,
                     source: .exact
                 )
             )
         }
-        let segments = PhraseSegmenter.greedy(digits: composingDigits, lexicon: lexicon)
-        if segments.count >= 2 {
-            let joined = segments.map(\.word).joined()
-            let weight = segments.map(\.weight).min() ?? 0
+
+        let paths = PhraseSegmenter.nBest(digits: composingDigits, lexicon: lexicon, limit: 8)
+        for (pi, path) in paths.enumerated() where path.entries.count >= 1 {
+            let toneBonus = toneScore(tones: path.tones)
+            let userBoost = userLexicon.boost(for: path.text, previous: lastCommitted.isEmpty ? nil : lastCommitted)
+            let segmentBonus = path.entries.count >= 2 ? 400.0 : 0
             scored.append(
                 Candidate(
-                    id: "seg-\(joined)",
-                    text: joined,
-                    reading: segments.map(\.reading).joined(separator: " "),
-                    score: Double(weight) + 300 + Double(segments.count) * 40,
+                    id: "seg-\(pi)-\(path.text)",
+                    text: path.text,
+                    reading: path.reading,
+                    score: Double(path.weight) + segmentBonus + toneBonus + userBoost - Double(pi) * 15,
                     source: .exact
                 )
             )
@@ -171,7 +164,7 @@ final class InputEngine: ObservableObject {
 
         let exact = lexicon.candidates(forDigits: composingDigits, limit: 40)
         for e in exact {
-            let toneBonus = toneScore(entry: e)
+            let toneBonus = toneScore(tones: e.tones)
             let userBoost = userLexicon.boost(for: e.word, previous: lastCommitted.isEmpty ? nil : lastCommitted)
             let lengthPenalty = abs(e.t9.count - composingDigits.count) * 5
             let score = Double(e.weight) + toneBonus + userBoost - Double(lengthPenalty)
@@ -188,8 +181,9 @@ final class InputEngine: ObservableObject {
 
         let fuzzy = FuzzyMatcher.fuzzy(digits: composingDigits, lexicon: lexicon, maxDistance: 1, limit: 20)
         for m in fuzzy {
+            let toneBonus = toneScore(tones: m.entry.tones) * 0.5
             let userBoost = userLexicon.boost(for: m.entry.word, previous: lastCommitted.isEmpty ? nil : lastCommitted)
-            let score = Double(m.entry.weight) * 0.55 + userBoost - Double(m.distance) * 200
+            let score = Double(m.entry.weight) * 0.55 + toneBonus + userBoost - Double(m.distance) * 200
             scored.append(
                 Candidate(
                     id: "fz-\(m.entry.word)-\(m.entry.reading)",
@@ -201,7 +195,6 @@ final class InputEngine: ObservableObject {
             )
         }
 
-        // Dedup by text, keep highest score
         var best: [String: Candidate] = [:]
         for c in scored {
             if let existing = best[c.text] {
@@ -213,16 +206,31 @@ final class InputEngine: ObservableObject {
         candidates = best.values.sorted { $0.score > $1.score }.prefix(12).map { $0 }
     }
 
-    private func toneScore(entry: LexiconEntry) -> Double {
+    /// Strong tone match on trailing syllables. Second tone on 行 must beat 幸.
+    private func toneScore(tones entryTones: String) -> Double {
         guard !composingTones.isEmpty else { return 0 }
-        // Reward matching trailing tones if user typed any.
         let wanted = Array(composingTones)
-        let have = Array(entry.tones.filter { $0 != "-" })
+        let have = Array(entryTones.filter { $0 != "-" })
+        guard !have.isEmpty else { return -100 }
         var bonus: Double = 0
-        for (a, b) in zip(wanted.reversed(), have.reversed()) {
-            if a == b { bonus += 80 }
-            else { bonus -= 20 }
+        // Align from the end: last typed tone ↔ last syllable
+        for (offset, w) in wanted.reversed().enumerated() {
+            if offset >= have.count {
+                bonus -= 150
+                continue
+            }
+            let h = have[have.count - 1 - offset]
+            if w == h {
+                bonus += 900  // decisive
+            } else {
+                bonus -= 700
+            }
         }
         return bonus
+    }
+
+    private func syllableEstimate(for digits: String) -> Int {
+        // Rough: most syllables are 1–3 T9 keys; use tone slots ≈ digit_len/2 capped.
+        max(1, (digits.count + 1) / 2)
     }
 }
