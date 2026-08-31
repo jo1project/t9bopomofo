@@ -51,7 +51,7 @@ final class RimeEngine {
         RimeInitialize(&traits)
 
         // First launch compiles dicts; join so candidates are available immediately.
-        if RimeStartMaintenance(True) != 0 {
+        if RimeStartMaintenance(1) != 0 {
             RimeJoinMaintenanceThread()
         }
 
