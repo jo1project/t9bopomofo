@@ -14,6 +14,8 @@ settings:
     GENERATE_INFOPLIST_FILE: NO
     CODE_SIGN_STYLE: Manual
     CODE_SIGNING_ALLOWED: YES
+    CLANG_CXX_LANGUAGE_STANDARD: "c++17"
+    CLANG_CXX_LIBRARY: "libc++"
 
 targets:
   T9Bopomofo:
@@ -21,7 +23,6 @@ targets:
     platform: iOS
     sources:
       - path: T9Bopomofo/App
-      - path: T9Bopomofo/Shared
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.jo1project.t9bopomofo
       INFOPLIST_FILE: T9Bopomofo/App/Info.plist
@@ -43,6 +44,9 @@ targets:
       - path: Resources/rime
         buildPhase: resources
         type: folder
+        excludes:
+          - "**/*.gram"
+          - "**/default.prelude.yaml"
       - path: Resources/layouts
         buildPhase: resources
         type: folder
@@ -55,6 +59,34 @@ targets:
       PROVISIONING_PROFILE_SPECIFIER: ""
       SKIP_INSTALL: YES
       LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks"
+      SWIFT_OBJC_BRIDGING_HEADER: T9Bopomofo/RimeBridge/T9Bopomofo-Bridging-Header.h
+      HEADER_SEARCH_PATHS: "$(inherited) $(SRCROOT)/T9Bopomofo/RimeBridge/include"
+      FRAMEWORK_SEARCH_PATHS: "$(inherited) $(SRCROOT)/Frameworks"
+      OTHER_LDFLAGS: "$(inherited) -lc++ -liconv -lz"
+      CLANG_ENABLE_MODULES: YES
+    dependencies:
+      - framework: Frameworks/librime.xcframework
+        embed: false
+      - framework: Frameworks/boost_atomic.xcframework
+        embed: false
+      - framework: Frameworks/boost_filesystem.xcframework
+        embed: false
+      - framework: Frameworks/boost_regex.xcframework
+        embed: false
+      - framework: Frameworks/boost_system.xcframework
+        embed: false
+      - framework: Frameworks/libglog.xcframework
+        embed: false
+      - framework: Frameworks/libleveldb.xcframework
+        embed: false
+      - framework: Frameworks/libmarisa.xcframework
+        embed: false
+      - framework: Frameworks/libopencc.xcframework
+        embed: false
+      - framework: Frameworks/libyaml-cpp.xcframework
+        embed: false
+      - sdk: CoreFoundation.framework
+      - sdk: Security.framework
     info:
       path: T9Bopomofo/Keyboard/Info.plist
       properties:

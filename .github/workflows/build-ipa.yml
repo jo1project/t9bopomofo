@@ -9,6 +9,7 @@ on:
     paths:
       - "T9Bopomofo/**"
       - "Resources/**"
+      - "Scripts/**"
       - "project.yml"
       - ".github/workflows/build-ipa.yml"
 
@@ -29,7 +30,6 @@ jobs:
       - name: Select latest Xcode
         run: |
           set -euo pipefail
-          # Prefer newest installed Xcode on the runner
           XCODE_APP="$(ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -1)"
           if [[ -z "${XCODE_APP}" ]]; then
             echo "::error::No Xcode.app found"
@@ -42,6 +42,12 @@ jobs:
 
       - name: Install XcodeGen
         run: brew install xcodegen
+
+      - name: Download librime frameworks
+        run: ./Scripts/download-frameworks.sh
+
+      - name: Download essay + prelude
+        run: ./Scripts/download-models.sh
 
       - name: Engine reference tests
         run: python3 Tests/test_engine_ref.py
@@ -75,10 +81,15 @@ jobs:
             find build/Build/Products -maxdepth 3 -type d -name "*.app" -o -name "*.appex" || true
             exit 1
           fi
-          # Ensure keyboard extension is embedded
           if [[ ! -d "$APP_PATH/PlugIns/T9Keyboard.appex" ]]; then
             echo "::warning::T9Keyboard.appex not found under PlugIns; listing app contents:"
             find "$APP_PATH" -maxdepth 3 | head -100
+          fi
+          # Sanity: librime symbols should be linked into the appex
+          APPEX="$APP_PATH/PlugIns/T9Keyboard.appex/T9Keyboard"
+          if [[ -f "$APPEX" ]]; then
+            echo "Keyboard binary size: $(ls -lh "$APPEX" | awk '{print $5}')"
+            nm -u "$APPEX" 2>/dev/null | head -5 || true
           fi
           rm -rf Payload
           mkdir -p Payload

@@ -1,47 +1,31 @@
-# Architecture: why Hamster feels smarter
+# Architecture: librime-backed T9 Zhuyin
 
 ## Short answer
 
-Hamster is **not** a custom decoder. It is a keyboard shell around **librime**
-(Rime) plus your schema (`bopomofo_phone` / `bopomofo_t9`), `rime.lua`
-(`t9_sort_filter`), optional `user_predict` Lua, `essay.txt`, and
-`zh-hant-t-essay-bgw.gram`.
+Hamster is a keyboard shell around **librime**. This app now does the same:
+custom `zhuyin_phone` UI + **librime** (LibrimeKit xcframeworks) running your
+`bopomofo_phone` / `bopomofo_t9` schema, `rime.lua` (`t9_sort_filter`),
+`user_predict` Lua, and `essay.txt`.
 
-This app originally shipped a **hand-rolled Swift T9 matcher**. That is why
-fixes looked like “one word at a time”: we were patching symptoms of a toy
-ranker, not running the same engine Hamster uses.
+## Runtime layout
 
-## What Rime actually does
+| Layer | Implementation |
+|-------|----------------|
+| UI | Swift keyboard (`zhuyin_phone`) |
+| Engine | `RimeEngine` → librime C API (`process_key` / candidates / `clear_composition`) |
+| Fallback | Swift T9 matcher if Rime fails to start |
+| Schema / dict / lua | Bundled under `Resources/rime/`, copied to App Group on first launch |
+| xcframeworks | `Scripts/download-frameworks.sh` (amorphobia/LibrimeKit) |
+| essay | `Scripts/download-models.sh` |
 
-1. **Speller algebra** — maps pinyin → internal codes → T9 digits (your schema).
-2. **Syllable graph** — every legal segmentation of the key stream.
-3. **script_translator + Poet** — dictionary lookup + sentence composition
-   using `essay` phrase table.
-4. **octagram grammar** (`.gram`) — reweights candidates with preceding text
-   (`contextual_suggestions`).
-5. **t9_sort_filter (rime.lua)** — UI-facing order:
-   - full-coverage first
-   - first-syllable promote when a tone anchors syllable 1 (this is why `有`
-     appears when you type tone after `ㄧㄡ`)
-   - round-robin partial spans so you can segment-select
-   - orphan-tone breaks last
-6. **user_predict.lua** — post-commit association learning.
+## Product rules preserved
 
-## Direction in this repo
+- Symbol / space / return → insert only + `clear_composition` (never first-candidate commit)
+- Exact long-press sends schema letters (`b`/`g`/…) into Rime, not just T9 digits
+- User learning still via App Group `UserLexicon` (+ Rime userdb / lua predict)
 
-| Layer | Status |
-|-------|--------|
-| UI (`zhuyin_phone`) | Custom Swift keyboard (kept) |
-| Ranking | Porting `t9_sort_filter` into Swift; next: real librime |
-| Schema / dict / lua | Bundled under `Resources/rime/` (from your uploads + [SSARCandy/rime-bopomofo-t9](https://github.com/SSARCandy/rime-bopomofo-t9)) |
-| librime xcframework | `Scripts/download-frameworks.sh` (LibrimeKit) |
-| `.gram` / `essay.txt` | `Scripts/download-models.sh` |
+## Known gap
 
-Whack-a-mole weight edits in `taiwan_phrases` remain as **Taiwan boosts**, not
-as the primary ranking strategy.
-
-## What you should expect
-
-After librime is wired end-to-end, candidate quality should approach Hamster /
-元書 for the same schema+dict+gram. Until then, the Swift port of
-`t9_sort_filter` + full-span preference closes the worst gaps (`好像`/`有`/tone).
+`zh-hant-t-essay-bgw.gram` needs **librime-octagram**, which is not in LibrimeKit
+v0.1.0. Schema `grammar:` is commented out until that plugin is linked. Essay +
+Poet + `t9_sort_filter` still provide Hamster-like ranking for most cases.

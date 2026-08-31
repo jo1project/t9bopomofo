@@ -124,8 +124,9 @@ speller:
 #      https://github.com/lotem/rime-octagram-data （hant 分支）
 #   2. 將 .gram 檔放入 Hamster 的 RIME 使用者目錄（與本檔同層）
 #   3. 取消下面 grammar 區塊與 translator/contextual_suggestions 的註解，重新部署
-grammar:
-  language: zh-hant-t-essay-bgw
+# grammar/octagram requires librime-octagram plugin (not in LibrimeKit v0.1.0).
+# grammar:
+#   language: zh-hant-t-essay-bgw
 
 translator:
   dictionary: bopomofo_t9

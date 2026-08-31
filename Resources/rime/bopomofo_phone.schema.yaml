@@ -95,8 +95,10 @@ speller:
     - derive/[qwxy]$//
     - derive/^(.).+$/$1/
 
-grammar:
-  language: zh-hant-t-essay-bgw
+# grammar/octagram requires librime-octagram plugin (not in LibrimeKit v0.1.0).
+# Re-enable when the plugin is linked:
+# grammar:
+#   language: zh-hant-t-essay-bgw
 
 translator:
   dictionary: bopomofo_t9

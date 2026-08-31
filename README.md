@@ -7,11 +7,11 @@
 ## 為什麼之前像「遇到一個字改一個字」
 
 Hamster 的聰明來自 **librime** + 你的 schema／`rime.lua`（`t9_sort_filter`）／`essay`／`.gram`。  
-本專案一開始用的是簡化 Swift T9，所以只能靠加詞補洞。現在已：
+本專案一開始用的是簡化 Swift T9，所以只能靠加詞補洞。現在已接上 **librime**：
 
-1. 導入上游 `rime.lua` / `user_predict`（[SSARCandy/rime-bopomofo-t9](https://github.com/SSARCandy/rime-bopomofo-t9)）
-2. 在 Swift 端移植 `t9_sort_filter`（完整覆蓋優先、首音節提拔、聲調斷詞）
-3. 準備 LibrimeKit xcframework（`Scripts/download-frameworks.sh`）接真引擎
+1. 鍵盤 UI 自研；選詞走 librime（LibrimeKit xcframework）
+2. 方案／詞庫／`rime.lua`（`t9_sort_filter` + `user_predict`）來自你的上傳與 [SSARCandy/rime-bopomofo-t9](https://github.com/SSARCandy/rime-bopomofo-t9)
+3. Rime 啟動失敗時仍回退到 Swift T9（含 `t9_sort_filter` 移植）
 
 ## 行為（產品規則）
 

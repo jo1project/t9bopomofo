@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 
+/// Keyboard-facing input engine. Prefers librime; falls back to Swift T9 matcher.
 @MainActor
 final class InputEngine: ObservableObject {
     @Published private(set) var composingDigits: String = ""
@@ -8,9 +9,11 @@ final class InputEngine: ObservableObject {
     @Published private(set) var candidates: [Candidate] = []
     @Published private(set) var preeditDisplay: String = ""
     @Published private(set) var lastCommitted: String = ""
+    @Published private(set) var usingRime: Bool = false
 
     private let lexicon = DictionaryLoader()
     private let userLexicon: UserLexicon
+    private let rime = RimeEngine.shared
     private var loaded = false
 
     init(userLexicon: UserLexicon = UserLexicon()) {
@@ -18,6 +21,13 @@ final class InputEngine: ObservableObject {
     }
 
     func prepare(bundle: Bundle = .main) {
+        if !usingRime {
+            usingRime = rime.start(bundle: bundle)
+        }
+        if usingRime {
+            syncFromRime()
+            return
+        }
         guard !loaded else { return }
         do {
             try lexicon.loadFromBundle(bundle: bundle)
@@ -40,45 +50,76 @@ final class InputEngine: ObservableObject {
                 }
             }
         }
-        refreshCandidates()
+        refreshSwiftCandidates()
     }
 
     func load(from urls: [URL]) throws {
         try lexicon.load(from: urls)
         loaded = true
-        refreshCandidates()
+        refreshSwiftCandidates()
+    }
+
+    var isComposing: Bool {
+        if usingRime { return rime.isComposing || !rime.input.isEmpty }
+        return !composingDigits.isEmpty || !composingTones.isEmpty
     }
 
     func tapT9Key(_ key: Character) {
+        if usingRime {
+            _ = rime.processKey(key)
+            syncFromRime()
+            return
+        }
         composingDigits.append(key)
-        refreshCandidates()
+        refreshSwiftCandidates()
     }
 
     func tapTone(_ tone: Character) {
+        if usingRime {
+            _ = rime.processKey(tone)
+            syncFromRime()
+            return
+        }
         if composingTones.count >= syllableEstimate(for: composingDigits), !composingTones.isEmpty {
             composingTones.removeLast()
         }
         composingTones.append(tone)
-        refreshCandidates()
+        refreshSwiftCandidates()
     }
 
     func tapExactToken(_ token: Character) {
+        if usingRime {
+            // Send schema letter (b/g/Z/…) directly — finer than T9 digit.
+            _ = rime.processKey(token)
+            syncFromRime()
+            return
+        }
         if let key = T9KeyMap.tokenToKey[token] {
             composingDigits.append(key)
         }
-        refreshCandidates()
+        refreshSwiftCandidates()
     }
 
     func backspace() {
+        if usingRime {
+            rime.backspace()
+            syncFromRime()
+            return
+        }
         if !composingTones.isEmpty {
             composingTones.removeLast()
         } else if !composingDigits.isEmpty {
             composingDigits.removeLast()
         }
-        refreshCandidates()
+        refreshSwiftCandidates()
     }
 
     func clearComposing() {
+        if usingRime {
+            rime.clearComposition()
+            syncFromRime()
+            return
+        }
         composingDigits = ""
         composingTones = ""
         candidates = []
@@ -86,6 +127,24 @@ final class InputEngine: ObservableObject {
     }
 
     func selectCandidate(_ candidate: Candidate) -> String {
+        if usingRime {
+            // Candidate.id for Rime is "rime-<index>"
+            let idx: Int = {
+                if candidate.id.hasPrefix("rime-"),
+                   let n = Int(candidate.id.dropFirst(5)) {
+                    return n
+                }
+                return candidates.firstIndex(where: { $0.id == candidate.id }) ?? 0
+            }()
+            let text = rime.selectCandidate(at: idx)
+            if !text.isEmpty {
+                userLexicon.recordCommit(text, previous: lastCommitted.isEmpty ? nil : lastCommitted)
+                lastCommitted = text
+            }
+            syncFromRime()
+            return text
+        }
+
         let text = candidate.text
         userLexicon.recordCommit(text, previous: lastCommitted.isEmpty ? nil : lastCommitted)
         lastCommitted = text
@@ -106,9 +165,44 @@ final class InputEngine: ObservableObject {
     func handleReturn() -> String { insertPassthroughAndClear("\n") }
     func handleSymbol(_ symbol: String) -> String { insertPassthroughAndClear(symbol) }
 
-    // MARK: - Ranking (Hamster / rime.lua oriented)
+    // MARK: - Rime sync
 
-    private func refreshCandidates() {
+    private func syncFromRime() {
+        let input = rime.input
+        composingDigits = input
+        composingTones = String(input.filter { T9KeyMap.toneKeys.contains($0) })
+
+        let pre = rime.preedit
+        if !pre.isEmpty {
+            preeditDisplay = pre
+        } else if input.isEmpty {
+            preeditDisplay = ""
+        } else {
+            preeditDisplay = input.map { T9KeyMap.keyLabels[$0] ?? String($0) }.joined(separator: "·")
+        }
+
+        let raw = rime.candidates(limit: 12)
+        if raw.isEmpty, !lastCommitted.isEmpty, input.isEmpty {
+            let preds = userLexicon.predictions(after: lastCommitted)
+            candidates = preds.enumerated().map { idx, w in
+                Candidate(id: "pred-\(idx)-\(w)", text: w, reading: "", score: 1000 - Double(idx), source: .prediction)
+            }
+        } else {
+            candidates = raw.enumerated().map { idx, item in
+                Candidate(
+                    id: "rime-\(idx)",
+                    text: item.text,
+                    reading: item.comment,
+                    score: Double(1000 - idx),
+                    source: .exact
+                )
+            }
+        }
+    }
+
+    // MARK: - Swift fallback ranking
+
+    private func refreshSwiftCandidates() {
         preeditDisplay = composingDigits.isEmpty
             ? ""
             : composingDigits.map { T9KeyMap.keyLabels[$0] ?? String($0) }.joined(separator: "·")
@@ -129,7 +223,6 @@ final class InputEngine: ObservableObject {
         let digits = composingDigits
         let inputStream = T9SortFilter.combinedInput(digits: digits, tones: composingTones)
 
-        // 1) Every exact span that is a prefix of the digit stream (Rime partials)
         for (span, entries) in lexicon.prefixSpans(of: digits) {
             for e in entries {
                 let toneBonus = toneScore(tones: e.tones)
@@ -151,7 +244,6 @@ final class InputEngine: ObservableObject {
             }
         }
 
-        // 2) Full-buffer phrase + N-best segmentations
         if let phrase = PhraseSegmenter.bestPhrase(digits: digits, lexicon: lexicon) {
             let toneBonus = toneScore(tones: phrase.tones)
             let userBoost = userLexicon.boost(for: phrase.word, previous: lastCommitted.isEmpty ? nil : lastCommitted)
@@ -172,7 +264,6 @@ final class InputEngine: ObservableObject {
         for (pi, path) in PhraseSegmenter.nBest(digits: digits, lexicon: lexicon, limit: 8).enumerated() {
             let toneBonus = toneScore(tones: path.tones)
             let userBoost = userLexicon.boost(for: path.text, previous: lastCommitted.isEmpty ? nil : lastCommitted)
-            // Prefer fewer segments among full-coverage paths
             let segPenalty = Double(max(0, path.entries.count - 1)) * 200
             items.append(T9SortFilter.Item(
                 candidate: Candidate(
@@ -186,7 +277,6 @@ final class InputEngine: ObservableObject {
                 fullCoverage: true,
                 orphanTone: false
             ))
-            // Also expose the first segment alone (segment-select UX like Rime)
             if let first = path.entries.first, path.entries.count > 1 {
                 items.append(T9SortFilter.Item(
                     candidate: Candidate(
@@ -203,7 +293,6 @@ final class InputEngine: ObservableObject {
             }
         }
 
-        // 3) Light fuzzy (neighbor / missing) — marked as non-full unless exact length
         for m in FuzzyMatcher.fuzzy(digits: digits, lexicon: lexicon, maxDistance: 1, limit: 12) {
             let toneBonus = toneScore(tones: m.entry.tones) * 0.5
             let userBoost = userLexicon.boost(for: m.entry.word, previous: lastCommitted.isEmpty ? nil : lastCommitted)
@@ -221,14 +310,11 @@ final class InputEngine: ObservableObject {
             ))
         }
 
-        // Within each raw group, prefer higher score before t9_sort_filter order
         items.sort { $0.candidate.score > $1.candidate.score }
-
         let sorted = T9SortFilter.sort(items: items, inputDigitsAndTones: inputStream)
         candidates = Array(sorted.prefix(12))
     }
 
-    /// Tone match/mismatch. Decisive when user typed tones (Hamster tone filter).
     private func toneScore(tones entryTones: String) -> Double {
         guard !composingTones.isEmpty else { return 0 }
         let wanted = Array(composingTones)

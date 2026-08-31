@@ -171,7 +171,7 @@ final class KeyboardViewController: UIInputViewController {
                 hidePunctuationTray()
                 return
             }
-            if engine.composingDigits.isEmpty && engine.composingTones.isEmpty {
+            if !engine.isComposing {
                 textDocumentProxy.deleteBackward()
             } else {
                 engine.backspace()
