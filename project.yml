@@ -11,6 +11,9 @@ settings:
     SWIFT_VERSION: "5.0"
     TARGETED_DEVICE_FAMILY: "1,2"
     IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+    GENERATE_INFOPLIST_FILE: NO
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGNING_ALLOWED: YES
 
 targets:
   T9Bopomofo:
@@ -24,10 +27,12 @@ targets:
       INFOPLIST_FILE: T9Bopomofo/App/Info.plist
       CODE_SIGN_ENTITLEMENTS: T9Bopomofo/App/App.entitlements
       DEVELOPMENT_TEAM: ""
-      CODE_SIGN_STYLE: Automatic
+      CODE_SIGN_IDENTITY: ""
+      PROVISIONING_PROFILE_SPECIFIER: ""
     dependencies:
       - target: T9Keyboard
         embed: true
+        codeSign: false
 
   T9Keyboard:
     type: app-extension
@@ -46,8 +51,10 @@ targets:
       INFOPLIST_FILE: T9Bopomofo/Keyboard/Info.plist
       CODE_SIGN_ENTITLEMENTS: T9Bopomofo/Keyboard/Keyboard.entitlements
       DEVELOPMENT_TEAM: ""
-      CODE_SIGN_STYLE: Automatic
+      CODE_SIGN_IDENTITY: ""
+      PROVISIONING_PROFILE_SPECIFIER: ""
       SKIP_INSTALL: YES
+      LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks"
     info:
       path: T9Bopomofo/Keyboard/Info.plist
       properties:
@@ -60,3 +67,14 @@ targets:
             PrefersRightToLeft: false
             PrimaryLanguage: zh-Hant
             RequestsOpenAccess: true
+
+schemes:
+  T9Bopomofo:
+    build:
+      targets:
+        T9Bopomofo: all
+        T9Keyboard: all
+    run:
+      config: Debug
+    archive:
+      config: Release

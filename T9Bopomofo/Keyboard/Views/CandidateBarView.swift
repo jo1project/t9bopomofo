@@ -1,4 +1,5 @@
 import UIKit
+import ObjectiveC
 
 final class CandidateBarView: UIView {
     var onSelect: ((Candidate) -> Void)?

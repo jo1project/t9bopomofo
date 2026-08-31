@@ -8,47 +8,42 @@
 |------|------|
 | 佈局 | `zhuyin_phone`：左聲調、中 T9、右 ⌫／123／。／換行 |
 | 組字 | 一鍵多碼；聲調可省略 |
-| 符號／空格／換行 | **只插入該字元並清空組字，不送出第一候選** |
+| 符號／空格／換行 | **只插入該字元並清空組字，不會送出第一候選** |
 | 模糊 | 鄰鍵錯誤、漏打一碼 |
 | 詞庫 | `bopomofo_t9.dict` + `taiwan_phrases`（含拉亞等） |
 | 學習 | App Group 本機 bigram／詞頻 |
 | 模式 | 注音 ↔ EN ↔ 符號 ↔ Emoji |
 
-## 在 Mac 上建置（IPA）
+## 自動打包 IPA（GitHub Actions）
 
-1. 安裝 [XcodeGen](https://github.com/yonaskolb/XcodeGen)  
-2. （可選）下載語法模型與 essay：
+Workflow：`.github/workflows/build-ipa.yml`（常見 unsigned IPA 流程：`xcodebuild` + `CODE_SIGNING_ALLOWED=NO` + Payload zip）。
+
+1. 推送到 `main`／本功能分支，或到 Actions 手動 **Run workflow**
+2. 等 job **Build Unsigned IPA** 完成
+3. 下載 artifact **`T9Bopomofo-unsigned-ipa`**
+4. 用 **Sideloadly / AltStore / TrollStore** 等工具重簽後裝到裝置（未簽章 IPA 無法直接安裝）
+
+之後若要簽章 IPA，把 Apple 憑證與 profile 設成 repo secrets，再改用 `yukiarrr/ios-build-action`。
+
+## 本機建置（Mac）
 
 ```bash
-./Scripts/download-models.sh
-```
-
-3. 產生 Xcode 專案並打開：
-
-```bash
-brew install xcodegen   # 若尚未安裝
+./Scripts/download-models.sh   # 可選
+brew install xcodegen
 xcodegen generate
 open T9Bopomofo.xcodeproj
 ```
 
-4. 在 Xcode 設定你的 **Team** / Bundle ID，真機或模擬器跑 `T9Bopomofo`  
-5. 依 App 內說明：**設定 → 鍵盤 → 加入「T9 注音」→ 允許完整取用**  
-6. Product → Archive → Distribute → **Ad Hoc / Development IPA** 供內部測試
+設 Team → 啟用鍵盤並開「允許完整取用」→ Archive。
 
 ## 資源
 
-- `Resources/layouts/zhuyin_phone.yaml` — 鍵位來源  
-- `Resources/rime/*.schema.yaml` / `*.dict.yaml` — Rime 方案與詞庫  
+- `Resources/layouts/zhuyin_phone.yaml` — 鍵位來源
+- `Resources/rime/*.schema.yaml` / `*.dict.yaml` — Rime 方案與詞庫
 - `Scripts/download-models.sh` — `zh-hant-t-essay-bgw.gram`、`essay.txt`
 
-## 測試（Linux／CI 可跑）
+## 測試
 
 ```bash
 python3 Tests/test_engine_ref.py
 ```
-
-## 之後（非 v0.1）
-
-- 接入 [LibrimeKit](https://github.com/imfuxiao/LibrimeKit) xcframework，用完整 Rime + octagram  
-- 更完整 callout UI、漏／多打距離 2、萬象 user_predict Lua  
-- TestFlight 對外
