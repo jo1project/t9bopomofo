@@ -6,5 +6,11 @@
 #define Bool RimeCBool
 #include "rime_api.h"
 #undef Bool
+#ifdef True
+#undef True
+#endif
+#ifdef False
+#undef False
+#endif
 
 #endif /* T9Bopomofo_Bridging_Header_h */
