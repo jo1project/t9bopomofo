@@ -13,15 +13,21 @@ enum ZhuyinPhoneLayout {
         case exact(Character, label: String)
     }
 
-    struct Key: Identifiable, Equatable {
+    struct Callout: Identifiable {
+        let id: String
+        let label: String
+        let action: KeyAction
+    }
+
+    struct Key: Identifiable {
         let id: String
         let label: String
         let width: Double
         let action: KeyAction
-        let callouts: [(label: String, action: KeyAction)]
+        let callouts: [Callout]
     }
 
-    struct Row: Identifiable, Equatable {
+    struct Row: Identifiable {
         let id: String
         let keys: [Key]
     }
@@ -47,8 +53,14 @@ enum ZhuyinPhoneLayout {
             t9Key("8", "ㄏㄒㄠㄡ", exact: [("ㄏ", "h"), ("ㄒ", "B"), ("ㄠ", "K"), ("ㄡ", "L")]),
             t9Key("9", "ㄕㄙㄤㄨ", exact: [("ㄕ", "S"), ("ㄙ", "s"), ("ㄤ", "O"), ("ㄨ", "u")], reverseCallouts: true),
             Key(id: "period", label: "。", width: 0.16, action: .symbol("。"), callouts: [
-                ("。", .symbol("。")), ("，", .symbol("，")), ("？", .symbol("？")), ("！", .symbol("！")),
-                ("、", .symbol("、")), ("…", .symbol("…")), ("：", .symbol("：")), ("；", .symbol("；")),
+                Callout(id: "。", label: "。", action: .symbol("。")),
+                Callout(id: "，", label: "，", action: .symbol("，")),
+                Callout(id: "？", label: "？", action: .symbol("？")),
+                Callout(id: "！", label: "！", action: .symbol("！")),
+                Callout(id: "、", label: "、", action: .symbol("、")),
+                Callout(id: "…", label: "…", action: .symbol("…")),
+                Callout(id: "：", label: "：", action: .symbol("：")),
+                Callout(id: "；", label: "；", action: .symbol("；")),
             ]),
         ]),
         Row(id: "r3", keys: [
@@ -66,7 +78,9 @@ enum ZhuyinPhoneLayout {
         exact: [(String, String)],
         reverseCallouts: Bool = false
     ) -> Key {
-        var callouts = exact.map { (label: $0.0, action: KeyAction.exact($0.1.first!, label: $0.0)) }
+        var callouts = exact.map {
+            Callout(id: $0.0, label: $0.0, action: .exact($0.1.first!, label: $0.0))
+        }
         if reverseCallouts { callouts.reverse() }
         return Key(
             id: "t9-\(digit)",

@@ -35,7 +35,7 @@ final class ZhuyinKeyboardView: UIView {
                 btn.onTap = { [weak self] action in
                     self?.onAction?(action)
                 }
-                btn.onLongPressCallout = key.callouts
+                btn.onLongPressCallout = key.callouts.map { ($0.label, $0.action) }
                 rowStack.addArrangedSubview(btn)
                 btn.widthAnchor.constraint(equalTo: rowStack.widthAnchor, multiplier: key.width).isActive = true
             }
@@ -52,8 +52,7 @@ final class ZhuyinKeyboardView: UIView {
         en.addAction(UIAction { [weak self] _ in self?.onMode?() }, for: .touchUpInside)
         let emoji = UIButton(type: .system)
         emoji.setTitle("🙂", for: .normal)
-        emoji.addAction(UIAction { [weak self] _ in
-            // Handled by parent via mode — use notification-ish callback through onAction? Use onMode path with tag.
+        emoji.addAction(UIAction { _ in
             NotificationCenter.default.post(name: .t9SwitchEmoji, object: nil)
         }, for: .touchUpInside)
         modeRow.addArrangedSubview(en)

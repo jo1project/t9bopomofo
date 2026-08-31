@@ -27,9 +27,14 @@ final class DictionaryLoader: @unchecked Sendable {
 
     func loadFromBundle(bundle: Bundle = .main) throws {
         var urls: [URL] = []
-        for name in ["taiwan_phrases.dict", "bopomofo_t9.dict"] {
-            if let url = bundle.url(forResource: name, withExtension: "yaml") {
-                urls.append(url)
+        let names = ["taiwan_phrases.dict", "bopomofo_t9.dict"]
+        let subdirs: [String?] = ["rime", nil]
+        for name in names {
+            for sub in subdirs {
+                if let url = bundle.url(forResource: name, withExtension: "yaml", subdirectory: sub) {
+                    urls.append(url)
+                    break
+                }
             }
         }
         guard !urls.isEmpty else {
