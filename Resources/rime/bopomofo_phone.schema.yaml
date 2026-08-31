@@ -1,0 +1,175 @@
+schema:
+  schema_id: bopomofo_phone
+  name: "注音九宮格・聲母分組"
+  version: "1.3"
+
+switches:
+  - name: prediction
+    states: [ "關閉預測", "開啟預測" ]
+    reset: 1
+
+engine:
+  processors:
+    - lua_processor@*wanxiang.user_predict*P
+    - speller
+    - recognizer
+    - key_binder
+    - selector
+    - express_editor
+  segmentors:
+    - matcher
+    - abc_segmentor
+    - fallback_segmentor
+  translators:
+    - script_translator
+    - lua_translator@*wanxiang.user_predict*T
+  filters:
+    - lua_filter@t9_sort_filter
+    - lua_filter@*wanxiang.user_predict*F
+    - uniquifier
+
+speller:
+  alphabet: "abcdefghijklmnopqrstuvwxyz1234567890ABCDEIJKLMNOPSRVXZ"
+  initials: "abcdefghijklmnopqrstuvwxyz1234567890ABCDEIJKLMNOPSRVXZ"
+  use_space: false
+  delimiter: " '"
+  algebra:
+    - xform/^r5$/er5/
+    - xform/q/A/
+    - xform/x/B/
+    - xform/yong/vP/
+    - xform/iong/vP/
+    - xform/weng/uP/
+    - xform/ong/uP/
+    - xform/ing/iP/
+    - xform/^yu/v/
+    - xform/^yi?/i/
+    - xform/^wu?/u/
+    - xform/iu/iou/
+    - xform/ui/uei/
+    - xform/^([jAB])u/$1v/
+    - xform/([iuv])n/$1en/
+    - xform/^zhi?/Z/
+    - xform/^chi?/C/
+    - xform/^shi?/S/
+    - xform/^([zcsr])i/$1/
+    - xform/ai/I/
+    - xform/ei/J/
+    - xform/ao/K/
+    - xform/ou/L/
+    - xform/ang/O/
+    - xform/eng/P/
+    - xform/an/M/
+    - xform/en/N/
+    - xform/er/R/
+    - xform/eh/E/
+    - xform/([iv])e/$1E/
+    - xform/([a-zA-Z])1$/$1q/
+    - xform/([a-zA-Z])2$/$1w/
+    - xform/([a-zA-Z])3$/$1x/
+    - xform/([a-zA-Z])4$/$1y/
+    - xform/([a-zA-Z])5$/$1/
+    # T9 mixed map (same as bopomofo_t9)
+    - derive/^[bd]/1/
+    - derive/a/1/
+    - derive/^[gj]/2/
+    - derive/I/2/
+    - derive/^[Zz]/3/
+    - derive/[MR]/3/
+    - derive/^[pt]/4/
+    - derive/o/4/
+    - derive/^[kA]/5/
+    - derive/J/5/
+    - derive/^[Cc]/6/
+    - derive/[Ni]/6/
+    - derive/^[mn]/7/
+    - derive/e/7/
+    - derive/^[hB]/8/
+    - derive/[KL]/8/
+    - derive/^[Ss]/9/
+    - derive/[Ou]/9/
+    - derive/^[fl]/0/
+    - derive/E/0/
+    - derive/^r/v/
+    - derive/[Pv]/v/
+    - derive/[qwxy]$//
+    - derive/^(.).+$/$1/
+
+grammar:
+  language: zh-hant-t-essay-bgw
+
+translator:
+  dictionary: bopomofo_t9
+  prism: bopomofo_phone
+  enable_user_dict: true
+  contextual_suggestions: true
+  max_homophones: 7
+  preedit_format:
+    - xform/A/ㄑ/
+    - xform/B/ㄒ/
+    - xform/Z/ㄓ/
+    - xform/C/ㄔ/
+    - xform/S/ㄕ/
+    - xform/E/ㄝ/
+    - xform/I/ㄞ/
+    - xform/J/ㄟ/
+    - xform/K/ㄠ/
+    - xform/L/ㄡ/
+    - xform/M/ㄢ/
+    - xform/N/ㄣ/
+    - xform/O/ㄤ/
+    - xform/P/ㄥ/
+    - xform/R/ㄦ/
+    - xform/b/ㄅ/
+    - xform/p/ㄆ/
+    - xform/m/ㄇ/
+    - xform/f/ㄈ/
+    - xform/d/ㄉ/
+    - xform/t/ㄊ/
+    - xform/n/ㄋ/
+    - xform/l/ㄌ/
+    - xform/g/ㄍ/
+    - xform/k/ㄎ/
+    - xform/h/ㄏ/
+    - xform/j/ㄐ/
+    - xform/z/ㄗ/
+    - xform/c/ㄘ/
+    - xform/s/ㄙ/
+    - xform/r/ㄖ/
+    - xform/i/ㄧ/
+    - xform/u/ㄨ/
+    - xform/v/ㄩ/
+    - xform/a/ㄚ/
+    - xform/o/ㄛ/
+    - xform/e/ㄜ/
+    - xform/q/ˉ/
+    - xform/w/ˊ/
+    - xform/x/ˇ/
+    - xform/y/ˋ/
+    - xform/1/ㄅ/
+    - xform/2/ㄍ/
+    - xform/3/ㄓ/
+    - xform/4/ㄆ/
+    - xform/5/ㄎ/
+    - xform/6/ㄔ/
+    - xform/7/ㄇ/
+    - xform/8/ㄏ/
+    - xform/9/ㄕ/
+    - xform/0/ㄈ/
+
+key_binder:
+  import_preset: default
+  bindings:
+    - { when: composing, accept: Return, send: Shift+Return }
+
+recognizer:
+  import_preset: default
+  patterns:
+    abc: "^[a-zA-Z0-9]+$"
+
+user_predict:
+  db_name: predict
+  mobile_predict_style: post
+  max_candidates: 6
+  max_predictions: 3
+  context_timeout: 30000

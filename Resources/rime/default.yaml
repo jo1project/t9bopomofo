@@ -1,0 +1,5 @@
+# Rime default schema list (for future librime integration)
+config_version: "0.1"
+schema_list:
+  - schema: bopomofo_phone
+  - schema: bopomofo_t9
