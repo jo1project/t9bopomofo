@@ -47,19 +47,34 @@ final class DictionaryLoader: @unchecked Sendable {
 
     func candidates(forDigits digits: String, limit: Int = 40) -> [LexiconEntry] {
         guard !digits.isEmpty else { return [] }
-        // Exact prefix matches via bucket of first 1–4 keys, then filter.
         let key = String(digits.prefix(min(4, digits.count)))
         let idxs = prefixBuckets[key] ?? entries.indices.filter { entries[$0].t9.hasPrefix(String(digits.prefix(1))) }
         var out: [LexiconEntry] = []
         out.reserveCapacity(limit)
         for i in idxs {
             let e = entries[i]
-            if e.t9 == digits || e.t9.hasPrefix(digits) {
+            // Longer completions OR exact OR shorter spans that are prefixes of input
+            if e.t9 == digits || e.t9.hasPrefix(digits) || digits.hasPrefix(e.t9) {
                 out.append(e)
-                if out.count >= limit * 3 { break }
+                if out.count >= limit * 4 { break }
             }
         }
         return Array(out.sorted { $0.weight > $1.weight }.prefix(limit))
+    }
+
+    /// All lexicon hits whose T9 exactly equals a prefix of `digits` (Rime partial spans).
+    func prefixSpans(of digits: String, maxSpan: Int = 12) -> [(span: String, entries: [LexiconEntry])] {
+        guard !digits.isEmpty else { return [] }
+        var result: [(String, [LexiconEntry])] = []
+        let upper = min(maxSpan, digits.count)
+        for len in 1...upper {
+            let span = String(digits.prefix(len))
+            let hits = exact(digits: span)
+            if !hits.isEmpty {
+                result.append((span, Array(hits.prefix(6))))
+            }
+        }
+        return result
     }
 
     func exact(digits: String) -> [LexiconEntry] {

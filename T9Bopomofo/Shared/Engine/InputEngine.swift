@@ -24,12 +24,12 @@ final class InputEngine: ObservableObject {
             loaded = true
         } catch {
             let fm = FileManager.default
-            let candidates = [
+            let dirs = [
                 URL(fileURLWithPath: "Resources/rime"),
                 URL(fileURLWithPath: "../Resources/rime"),
                 URL(fileURLWithPath: "../../Resources/rime"),
             ]
-            for dir in candidates where fm.fileExists(atPath: dir.path) {
+            for dir in dirs where fm.fileExists(atPath: dir.path) {
                 let urls = ["taiwan_phrases.dict.yaml", "bopomofo_t9.dict.yaml"]
                     .map { dir.appendingPathComponent($0) }
                     .filter { fm.fileExists(atPath: $0.path) }
@@ -49,19 +49,14 @@ final class InputEngine: ObservableObject {
         refreshCandidates()
     }
 
-    // MARK: - Input
-
     func tapT9Key(_ key: Character) {
         composingDigits.append(key)
         refreshCandidates()
     }
 
     func tapTone(_ tone: Character) {
-        // Tone applies to the *current last syllable* (replace if already set for that slot).
-        if composingTones.count >= syllableEstimate(for: composingDigits) {
-            if !composingTones.isEmpty {
-                composingTones.removeLast()
-            }
+        if composingTones.count >= syllableEstimate(for: composingDigits), !composingTones.isEmpty {
+            composingTones.removeLast()
         }
         composingTones.append(tone)
         refreshCandidates()
@@ -111,7 +106,7 @@ final class InputEngine: ObservableObject {
     func handleReturn() -> String { insertPassthroughAndClear("\n") }
     func handleSymbol(_ symbol: String) -> String { insertPassthroughAndClear(symbol) }
 
-    // MARK: - Ranking
+    // MARK: - Ranking (Hamster / rime.lua oriented)
 
     private func refreshCandidates() {
         preeditDisplay = composingDigits.isEmpty
@@ -130,88 +125,110 @@ final class InputEngine: ObservableObject {
             return
         }
 
-        var scored: [Candidate] = []
+        var items: [T9SortFilter.Item] = []
+        let digits = composingDigits
+        let inputStream = T9SortFilter.combinedInput(digits: digits, tones: composingTones)
 
-        if let phrase = PhraseSegmenter.bestPhrase(digits: composingDigits, lexicon: lexicon) {
-            let toneBonus = toneScore(tones: phrase.tones)
-            let userBoost = userLexicon.boost(for: phrase.word, previous: lastCommitted.isEmpty ? nil : lastCommitted)
-            // Whole-buffer hit must beat short-word chops (號+臘xi1+食).
-            scored.append(
-                Candidate(
-                    id: "ph-\(phrase.word)-\(phrase.reading)",
-                    text: phrase.word,
-                    reading: phrase.reading,
-                    score: Double(phrase.weight) + 20_000 + toneBonus + userBoost,
-                    source: .exact
-                )
-            )
-        }
-
-        let paths = PhraseSegmenter.nBest(digits: composingDigits, lexicon: lexicon, limit: 8)
-        for (pi, path) in paths.enumerated() where path.entries.count >= 1 {
-            let toneBonus = toneScore(tones: path.tones)
-            let userBoost = userLexicon.boost(for: path.text, previous: lastCommitted.isEmpty ? nil : lastCommitted)
-            // Prefer fewer, longer segments. Penalize 3+ char chops hard.
-            let segPenalty = Double(path.entries.count - 1) * 8_000
-            let lengthCover = Double(path.entries.map(\.word.count).reduce(0, +)) * 30
-            scored.append(
-                Candidate(
-                    id: "seg-\(pi)-\(path.text)",
-                    text: path.text,
-                    reading: path.reading,
-                    score: Double(path.weight) + lengthCover + toneBonus + userBoost - segPenalty - Double(pi) * 20,
-                    source: .exact
-                )
-            )
-        }
-
-        let exact = lexicon.candidates(forDigits: composingDigits, limit: 40)
-        for e in exact {
-            let toneBonus = toneScore(tones: e.tones)
-            let userBoost = userLexicon.boost(for: e.word, previous: lastCommitted.isEmpty ? nil : lastCommitted)
-            let exactLenBonus = e.t9 == composingDigits ? 15_000.0 : 0
-            let lengthPenalty = abs(e.t9.count - composingDigits.count) * 80
-            let score = Double(e.weight) + exactLenBonus + toneBonus + userBoost - Double(lengthPenalty)
-            scored.append(
-                Candidate(
-                    id: "ex-\(e.word)-\(e.reading)",
+        // 1) Every exact span that is a prefix of the digit stream (Rime partials)
+        for (span, entries) in lexicon.prefixSpans(of: digits) {
+            for e in entries {
+                let toneBonus = toneScore(tones: e.tones)
+                let userBoost = userLexicon.boost(for: e.word, previous: lastCommitted.isEmpty ? nil : lastCommitted)
+                let score = Double(e.weight) + toneBonus + userBoost
+                let cand = Candidate(
+                    id: "span-\(span)-\(e.word)-\(e.reading)",
                     text: e.word,
                     reading: e.reading,
                     score: score,
                     source: .exact
                 )
-            )
+                items.append(T9SortFilter.Item(
+                    candidate: cand,
+                    coverage: span.count,
+                    fullCoverage: span.count == digits.count,
+                    orphanTone: false
+                ))
+            }
         }
 
-        let fuzzy = FuzzyMatcher.fuzzy(digits: composingDigits, lexicon: lexicon, maxDistance: 1, limit: 20)
-        for m in fuzzy {
+        // 2) Full-buffer phrase + N-best segmentations
+        if let phrase = PhraseSegmenter.bestPhrase(digits: digits, lexicon: lexicon) {
+            let toneBonus = toneScore(tones: phrase.tones)
+            let userBoost = userLexicon.boost(for: phrase.word, previous: lastCommitted.isEmpty ? nil : lastCommitted)
+            items.append(T9SortFilter.Item(
+                candidate: Candidate(
+                    id: "ph-\(phrase.word)-\(phrase.reading)",
+                    text: phrase.word,
+                    reading: phrase.reading,
+                    score: Double(phrase.weight) + 500 + toneBonus + userBoost,
+                    source: .exact
+                ),
+                coverage: digits.count,
+                fullCoverage: true,
+                orphanTone: false
+            ))
+        }
+
+        for (pi, path) in PhraseSegmenter.nBest(digits: digits, lexicon: lexicon, limit: 8).enumerated() {
+            let toneBonus = toneScore(tones: path.tones)
+            let userBoost = userLexicon.boost(for: path.text, previous: lastCommitted.isEmpty ? nil : lastCommitted)
+            // Prefer fewer segments among full-coverage paths
+            let segPenalty = Double(max(0, path.entries.count - 1)) * 200
+            items.append(T9SortFilter.Item(
+                candidate: Candidate(
+                    id: "seg-\(pi)-\(path.text)",
+                    text: path.text,
+                    reading: path.reading,
+                    score: Double(path.weight) + toneBonus + userBoost - segPenalty,
+                    source: .exact
+                ),
+                coverage: digits.count,
+                fullCoverage: true,
+                orphanTone: false
+            ))
+            // Also expose the first segment alone (segment-select UX like Rime)
+            if let first = path.entries.first, path.entries.count > 1 {
+                items.append(T9SortFilter.Item(
+                    candidate: Candidate(
+                        id: "seg1-\(pi)-\(first.word)",
+                        text: first.word,
+                        reading: first.reading,
+                        score: Double(first.weight) + toneScore(tones: first.tones) + userLexicon.boost(for: first.word, previous: lastCommitted.isEmpty ? nil : lastCommitted),
+                        source: .exact
+                    ),
+                    coverage: first.t9.count,
+                    fullCoverage: false,
+                    orphanTone: false
+                ))
+            }
+        }
+
+        // 3) Light fuzzy (neighbor / missing) — marked as non-full unless exact length
+        for m in FuzzyMatcher.fuzzy(digits: digits, lexicon: lexicon, maxDistance: 1, limit: 12) {
             let toneBonus = toneScore(tones: m.entry.tones) * 0.5
             let userBoost = userLexicon.boost(for: m.entry.word, previous: lastCommitted.isEmpty ? nil : lastCommitted)
-            let score = Double(m.entry.weight) * 0.55 + toneBonus + userBoost - Double(m.distance) * 200
-            scored.append(
-                Candidate(
+            items.append(T9SortFilter.Item(
+                candidate: Candidate(
                     id: "fz-\(m.entry.word)-\(m.entry.reading)",
                     text: m.entry.word,
                     reading: m.entry.reading,
-                    score: score,
+                    score: Double(m.entry.weight) * 0.45 + toneBonus + userBoost - Double(m.distance) * 300,
                     source: m.kind
-                )
-            )
+                ),
+                coverage: m.entry.t9.count,
+                fullCoverage: m.entry.t9.count == digits.count && m.distance == 0,
+                orphanTone: false
+            ))
         }
 
-        var best: [String: Candidate] = [:]
-        for c in scored {
-            if let existing = best[c.text] {
-                if c.score > existing.score { best[c.text] = c }
-            } else {
-                best[c.text] = c
-            }
-        }
-        candidates = best.values.sorted { $0.score > $1.score }.prefix(12).map { $0 }
+        // Within each raw group, prefer higher score before t9_sort_filter order
+        items.sort { $0.candidate.score > $1.candidate.score }
+
+        let sorted = T9SortFilter.sort(items: items, inputDigitsAndTones: inputStream)
+        candidates = Array(sorted.prefix(12))
     }
 
-    /// Strong tone match on trailing syllables.
-    /// Mismatch must outweigh rare high-weight readings (e.g. 擾 you4 vs 有 you3).
+    /// Tone match/mismatch. Decisive when user typed tones (Hamster tone filter).
     private func toneScore(tones entryTones: String) -> Double {
         guard !composingTones.isEmpty else { return 0 }
         let wanted = Array(composingTones)
@@ -224,17 +241,12 @@ final class InputEngine: ObservableObject {
                 continue
             }
             let h = have[have.count - 1 - offset]
-            if w == h {
-                bonus += 12_000
-            } else {
-                bonus -= 18_000
-            }
+            bonus += (w == h) ? 12_000 : -18_000
         }
         return bonus
     }
 
     private func syllableEstimate(for digits: String) -> Int {
-        // Rough: most syllables are 1–3 T9 keys; use tone slots ≈ digit_len/2 capped.
         max(1, (digits.count + 1) / 2)
     }
 }
