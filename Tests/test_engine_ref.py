@@ -283,6 +283,56 @@ def test_haoxiang_beats_haolashi():
     print("haoxiang OK", scored[:3])
 
 
+def test_you_beats_rao():
+    """有 you3 must beat 擾 you4 on 68; third tone makes it decisive."""
+    entries = []
+    for name in ("taiwan_phrases.dict.yaml", "bopomofo_t9.dict.yaml"):
+        entries.extend(parse_dict(DICT / name))
+    digits = encode_reading("you3")
+    assert digits == "68"
+
+    def score(wt, tones, wanted=""):
+        bonus = 0
+        if wanted:
+            have = [c for c in tones if c != "-"]
+            for offset, w in enumerate(reversed(wanted)):
+                if offset >= len(have):
+                    bonus -= 500
+                    continue
+                h = have[len(have) - 1 - offset]
+                bonus += 12000 if w == h else -18000
+        return wt + 15000 + bonus
+
+    def tones_of(reading: str) -> str:
+        out = ""
+        for part in reading.split():
+            _, t = encode_syllable(part)
+            out += t or "-"
+        return out
+
+    # without tone
+    cands = []
+    for w, r, t9, wt in entries:
+        if t9 != digits:
+            continue
+        cands.append((score(wt, tones_of(r), ""), w, r))
+    cands.sort(reverse=True)
+    assert cands[0][1] == "有", cands[:8]
+
+    # with 3rd tone
+    cands3 = []
+    for w, r, t9, wt in entries:
+        if t9 != digits:
+            continue
+        cands3.append((score(wt, tones_of(r), "x"), w, r))
+    cands3.sort(reverse=True)
+    assert cands3[0][1] == "有", cands3[:8]
+    # 擾 you4 must be penalized
+    rao = [c for c in cands3 if c[1] == "擾"]
+    assert rao and rao[0][0] < cands3[0][0]
+    print("you_beats_rao OK", cands[:3], "with tone", cands3[:3])
+
+
 def main() -> int:
     test_encode_samples()
     test_dict_contains_targets()
@@ -291,6 +341,7 @@ def main() -> int:
     test_success_phrase()
     test_bushixing_vs_buxing()
     test_haoxiang_beats_haolashi()
+    test_you_beats_rao()
     print("ALL PASSED")
     return 0
 

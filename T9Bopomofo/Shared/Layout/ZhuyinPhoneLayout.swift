@@ -8,6 +8,7 @@ enum ZhuyinPhoneLayout {
         case backspace
         case numberPad
         case symbol(String)
+        case punctuationMenu  // 。 key → show common punctuation tray
         case space
         case enter
         case exact(Character, label: String)
@@ -52,7 +53,7 @@ enum ZhuyinPhoneLayout {
             t9Key("7", "ㄇㄋㄜ", exact: [("ㄇ", "m"), ("ㄋ", "n"), ("ㄜ", "e")]),
             t9Key("8", "ㄏㄒㄠㄡ", exact: [("ㄏ", "h"), ("ㄒ", "B"), ("ㄠ", "K"), ("ㄡ", "L")]),
             t9Key("9", "ㄕㄙㄤㄨ", exact: [("ㄕ", "S"), ("ㄙ", "s"), ("ㄤ", "O"), ("ㄨ", "u")], reverseCallouts: true),
-            Key(id: "period", label: "。", width: 0.16, action: .symbol("。"), callouts: [
+            Key(id: "period", label: "。", width: 0.16, action: .punctuationMenu, callouts: [
                 Callout(id: "。", label: "。", action: .symbol("。")),
                 Callout(id: "，", label: "，", action: .symbol("，")),
                 Callout(id: "？", label: "？", action: .symbol("？")),
@@ -61,6 +62,13 @@ enum ZhuyinPhoneLayout {
                 Callout(id: "…", label: "…", action: .symbol("…")),
                 Callout(id: "：", label: "：", action: .symbol("：")),
                 Callout(id: "；", label: "；", action: .symbol("；")),
+                Callout(id: "「", label: "「", action: .symbol("「")),
+                Callout(id: "」", label: "」", action: .symbol("」")),
+                Callout(id: "（", label: "（", action: .symbol("（")),
+                Callout(id: "）", label: "）", action: .symbol("）")),
+                Callout(id: "~", label: "～", action: .symbol("～")),
+                Callout(id: "@", label: "@", action: .symbol("@")),
+                Callout(id: "#", label: "#", action: .symbol("#")),
             ]),
         ]),
         Row(id: "r3", keys: [

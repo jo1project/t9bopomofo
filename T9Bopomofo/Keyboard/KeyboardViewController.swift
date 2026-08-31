@@ -14,6 +14,7 @@ final class KeyboardViewController: UIInputViewController {
     private let candidateBar = CandidateBarView()
     private let keyboardContainer = UIView()
     private var heightConstraint: NSLayoutConstraint?
+    private weak var punctuationTray: PunctuationTrayView?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -157,31 +158,81 @@ final class KeyboardViewController: UIInputViewController {
     private func handleZhuyin(_ action: ZhuyinPhoneLayout.KeyAction) {
         switch action {
         case .t9(let ch):
+            hidePunctuationTray()
             engine.tapT9Key(ch)
         case .tone(let ch):
+            hidePunctuationTray()
             engine.tapTone(ch)
         case .exact(let token, _):
+            hidePunctuationTray()
             engine.tapExactToken(token)
         case .backspace:
+            if punctuationTray != nil {
+                hidePunctuationTray()
+                return
+            }
             if engine.composingDigits.isEmpty && engine.composingTones.isEmpty {
                 textDocumentProxy.deleteBackward()
             } else {
                 engine.backspace()
             }
         case .numberPad:
+            hidePunctuationTray()
             mode = .symbols
             renderKeyboard()
             return
+        case .punctuationMenu:
+            if punctuationTray != nil {
+                hidePunctuationTray()
+            } else {
+                showPunctuationTray()
+            }
+            return
         case .symbol(let s):
+            hidePunctuationTray()
             let out = engine.handleSymbol(s)
             textDocumentProxy.insertText(out)
         case .space:
+            hidePunctuationTray()
             let out = engine.handleSpace()
             textDocumentProxy.insertText(out)
         case .enter:
+            hidePunctuationTray()
             let out = engine.handleReturn()
             textDocumentProxy.insertText(out)
         }
         reloadCandidates()
+    }
+
+    private func showPunctuationTray() {
+        hidePunctuationTray()
+        let tray = PunctuationTrayView()
+        tray.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(tray)
+        NSLayoutConstraint.activate([
+            tray.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 6),
+            tray.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -6),
+            tray.bottomAnchor.constraint(equalTo: keyboardContainer.topAnchor, constant: -2),
+            tray.heightAnchor.constraint(equalToConstant: 52),
+        ])
+        tray.onPick = { [weak self] symbol in
+            guard let self else { return }
+            let out = self.engine.handleSymbol(symbol)
+            self.textDocumentProxy.insertText(out)
+            self.hidePunctuationTray()
+            self.reloadCandidates()
+        }
+        tray.onDismiss = { [weak self] in
+            self?.hidePunctuationTray()
+        }
+        punctuationTray = tray
+        // Grow keyboard a bit so tray doesn't crush candidates
+        heightConstraint?.constant = 360
+    }
+
+    private func hidePunctuationTray() {
+        punctuationTray?.removeFromSuperview()
+        punctuationTray = nil
+        heightConstraint?.constant = 308
     }
 }

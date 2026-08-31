@@ -78,7 +78,7 @@ final class ZhuyinKeyboardView: UIView {
 
     private static func isFunctionKey(_ action: ZhuyinPhoneLayout.KeyAction) -> Bool {
         switch action {
-        case .backspace, .numberPad, .symbol, .enter: return true
+        case .backspace, .numberPad, .symbol, .enter, .punctuationMenu: return true
         default: return false
         }
     }

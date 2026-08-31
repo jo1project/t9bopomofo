@@ -210,24 +210,24 @@ final class InputEngine: ObservableObject {
         candidates = best.values.sorted { $0.score > $1.score }.prefix(12).map { $0 }
     }
 
-    /// Strong tone match on trailing syllables. Second tone on 行 must beat 幸.
+    /// Strong tone match on trailing syllables.
+    /// Mismatch must outweigh rare high-weight readings (e.g. 擾 you4 vs 有 you3).
     private func toneScore(tones entryTones: String) -> Double {
         guard !composingTones.isEmpty else { return 0 }
         let wanted = Array(composingTones)
         let have = Array(entryTones.filter { $0 != "-" })
         guard !have.isEmpty else { return -100 }
         var bonus: Double = 0
-        // Align from the end: last typed tone ↔ last syllable
         for (offset, w) in wanted.reversed().enumerated() {
             if offset >= have.count {
-                bonus -= 150
+                bonus -= 500
                 continue
             }
             let h = have[have.count - 1 - offset]
             if w == h {
-                bonus += 900  // decisive
+                bonus += 12_000
             } else {
-                bonus -= 700
+                bonus -= 18_000
             }
         }
         return bonus
