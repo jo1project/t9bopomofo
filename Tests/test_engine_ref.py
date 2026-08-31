@@ -263,6 +263,26 @@ def test_bushixing_vs_buxing():
     print("bushixing OK", digits, "top", top[:3])
 
 
+def test_haoxiang_beats_haolashi():
+    """88869 must rank 好像 above 號臘食 (臘xi1 chop)."""
+    entries = []
+    for name in ("taiwan_phrases.dict.yaml", "bopomofo_t9.dict.yaml"):
+        entries.extend(parse_dict(DICT / name))
+    digits = encode_reading("hao3 xiang4")
+    assert digits == "88869"
+
+    # Score like InputEngine: whole match +20k; multi-seg penalty 8k each extra
+    scored = []
+    for w, r, t9, wt in entries:
+        if t9 == digits:
+            scored.append((wt + 20_000 + 15_000, w))  # phrase + exactLen
+    # fake chop path
+    scored.append((9900 + 30 * 3 - 8_000 * 2, "號臘食"))
+    scored.sort(reverse=True)
+    assert scored[0][1] == "好像", scored[:5]
+    print("haoxiang OK", scored[:3])
+
+
 def main() -> int:
     test_encode_samples()
     test_dict_contains_targets()
@@ -270,6 +290,7 @@ def main() -> int:
     test_clear_on_symbol_behavior()
     test_success_phrase()
     test_bushixing_vs_buxing()
+    test_haoxiang_beats_haolashi()
     print("ALL PASSED")
     return 0
 

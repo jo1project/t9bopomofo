@@ -135,12 +135,13 @@ final class InputEngine: ObservableObject {
         if let phrase = PhraseSegmenter.bestPhrase(digits: composingDigits, lexicon: lexicon) {
             let toneBonus = toneScore(tones: phrase.tones)
             let userBoost = userLexicon.boost(for: phrase.word, previous: lastCommitted.isEmpty ? nil : lastCommitted)
+            // Whole-buffer hit must beat short-word chops (號+臘xi1+食).
             scored.append(
                 Candidate(
                     id: "ph-\(phrase.word)-\(phrase.reading)",
                     text: phrase.word,
                     reading: phrase.reading,
-                    score: Double(phrase.weight) + 800 + toneBonus + userBoost,
+                    score: Double(phrase.weight) + 20_000 + toneBonus + userBoost,
                     source: .exact
                 )
             )
@@ -150,13 +151,15 @@ final class InputEngine: ObservableObject {
         for (pi, path) in paths.enumerated() where path.entries.count >= 1 {
             let toneBonus = toneScore(tones: path.tones)
             let userBoost = userLexicon.boost(for: path.text, previous: lastCommitted.isEmpty ? nil : lastCommitted)
-            let segmentBonus = path.entries.count >= 2 ? 400.0 : 0
+            // Prefer fewer, longer segments. Penalize 3+ char chops hard.
+            let segPenalty = Double(path.entries.count - 1) * 8_000
+            let lengthCover = Double(path.entries.map(\.word.count).reduce(0, +)) * 30
             scored.append(
                 Candidate(
                     id: "seg-\(pi)-\(path.text)",
                     text: path.text,
                     reading: path.reading,
-                    score: Double(path.weight) + segmentBonus + toneBonus + userBoost - Double(pi) * 15,
+                    score: Double(path.weight) + lengthCover + toneBonus + userBoost - segPenalty - Double(pi) * 20,
                     source: .exact
                 )
             )
@@ -166,8 +169,9 @@ final class InputEngine: ObservableObject {
         for e in exact {
             let toneBonus = toneScore(tones: e.tones)
             let userBoost = userLexicon.boost(for: e.word, previous: lastCommitted.isEmpty ? nil : lastCommitted)
-            let lengthPenalty = abs(e.t9.count - composingDigits.count) * 5
-            let score = Double(e.weight) + toneBonus + userBoost - Double(lengthPenalty)
+            let exactLenBonus = e.t9 == composingDigits ? 15_000.0 : 0
+            let lengthPenalty = abs(e.t9.count - composingDigits.count) * 80
+            let score = Double(e.weight) + exactLenBonus + toneBonus + userBoost - Double(lengthPenalty)
             scored.append(
                 Candidate(
                     id: "ex-\(e.word)-\(e.reading)",
