@@ -304,6 +304,14 @@ keyboards:
         action:
           symbol:
             char: ）
+      - label: 【
+        action:
+          symbol:
+            char: 【
+      - label: 】
+        action:
+          symbol:
+            char: 】
       - label: '@'
         action:
           symbol:
@@ -408,6 +416,14 @@ keyboards:
         action:
           symbol:
             char: ）
+      - label: 【
+        action:
+          symbol:
+            char: 【
+      - label: 】
+        action:
+          symbol:
+            char: 】
       - label: '@'
         action:
           symbol:
