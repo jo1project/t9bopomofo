@@ -40,7 +40,7 @@ final class ZhuyinKeyboardView: UIView {
                     self?.dismissCallout()
                     self?.onAction?(action)
                 }
-                btn.onLongPressCallout = key.callouts.map { ($0.label, $0.action) }
+                btn.setCallouts(key.callouts.map { ($0.label, $0.action) })
                 btn.onCalloutBegin = { [weak self, weak btn] items in
                     guard let self, let btn else { return }
                     self.showCallout(from: btn, items: items)
@@ -224,11 +224,6 @@ final class KeyButton: UIButton {
         layer.shadowOffset = CGSize(width: 0, height: 1)
         layer.shadowRadius = 0.5
         addTarget(self, action: #selector(tapped), for: .touchUpInside)
-
-        let lp = UILongPressGestureRecognizer(target: self, action: #selector(longPressed(_:)))
-        lp.minimumPressDuration = 0.35
-        lp.allowableMovement = 80
-        addGestureRecognizer(lp)
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -237,6 +232,21 @@ final class KeyButton: UIButton {
         repeatHandler = handler
         addTarget(self, action: #selector(touchDownRepeat), for: .touchDown)
         addTarget(self, action: #selector(touchUpRepeat), for: [.touchUpInside, .touchUpOutside, .touchCancel])
+    }
+
+    /// Attach callouts after init. Keys without callouts get no long-press gesture
+    /// so hold-to-repeat (backspace) is not cancelled.
+    func setCallouts(_ items: [(label: String, action: ZhuyinPhoneLayout.KeyAction)]) {
+        onLongPressCallout = items
+        gestureRecognizers?
+            .compactMap { $0 as? UILongPressGestureRecognizer }
+            .forEach { removeGestureRecognizer($0) }
+        guard !items.isEmpty else { return }
+        let lp = UILongPressGestureRecognizer(target: self, action: #selector(longPressed(_:)))
+        lp.minimumPressDuration = 0.35
+        lp.allowableMovement = 80
+        lp.cancelsTouchesInView = false
+        addGestureRecognizer(lp)
     }
 
     @objc private func tapped() {
@@ -276,11 +286,17 @@ final class KeyButton: UIButton {
         guard let handler = repeatHandler else { return }
         handler()
         repeatTimer?.invalidate()
-        repeatTimer = Timer.scheduledTimer(withTimeInterval: 0.4, repeats: false) { [weak self] _ in
-            self?.repeatTimer = Timer.scheduledTimer(withTimeInterval: 0.07, repeats: true) { [weak self] _ in
+        let delay = Timer(timeInterval: 0.4, repeats: false) { [weak self] _ in
+            guard let self else { return }
+            self.repeatTimer?.invalidate()
+            let fast = Timer(timeInterval: 0.07, repeats: true) { [weak self] _ in
                 self?.repeatHandler?()
             }
+            RunLoop.main.add(fast, forMode: .common)
+            self.repeatTimer = fast
         }
+        RunLoop.main.add(delay, forMode: .common)
+        repeatTimer = delay
     }
 
     @objc private func touchUpRepeat() {

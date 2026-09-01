@@ -185,10 +185,11 @@ struct LLMSettingsView: View {
                         .foregroundStyle(.secondary)
                     Button("填入 Groq 範例") {
                         baseURL = "https://api.groq.com/openai/v1"
-                        model = "llama-3.1-8b-instant"
+                        // Groq 會輪替可用 model；舊的 llama-3.1-8b-instant 已下架
+                        model = "groq/compound-mini"
                         AppSettings.shared.llmBaseURL = baseURL
                         AppSettings.shared.llmModel = model
-                        testStatus = "已填 Groq URL／Model，請到 console.groq.com 申請免費 API Key"
+                        testStatus = "已填 Groq URL／Model（groq/compound-mini），請貼上 console.groq.com 的 Key"
                     }
                 }
                 Section("OpenAI 相容 API") {
@@ -209,12 +210,12 @@ struct LLMSettingsView: View {
                     Button("測試聯想「你好」") {
                         testStatus = "請求中…"
                         Task {
-                            let words = await LLMPredictor.shared.suggest(after: "你好", limit: 5)
+                            let result = await LLMPredictor.shared.suggestDetailed(after: "你好", limit: 5)
                             await MainActor.run {
-                                if words.isEmpty {
-                                    testStatus = "失敗：檢查 Key／額度／網路／完整取用。OpenAI 需付費額度；可改試 Groq 免費 Key。"
+                                if result.words.isEmpty {
+                                    testStatus = "失敗：\(result.errorMessage ?? "未知錯誤")"
                                 } else {
-                                    testStatus = words.joined(separator: "、")
+                                    testStatus = result.words.joined(separator: "、")
                                 }
                             }
                         }

@@ -71,9 +71,11 @@ final class EnglishKeyboardView: UIView {
             }
 
             if rowIndex == 2 {
-                row.addArrangedSubview(makeKey("⌫", isFunction: true) { [weak self] in
+                let bs = makeKey("⌫", isFunction: true, addTap: false)
+                enableRepeatDelete(on: bs) { [weak self] in
                     self?.onBackspace?()
-                })
+                }
+                row.addArrangedSubview(bs)
             }
             root.addArrangedSubview(row)
         }
@@ -157,15 +159,45 @@ final class EnglishKeyboardView: UIView {
         shiftButton.setTitle(shiftTitle(), for: .normal)
     }
 
-    private func makeKey(_ title: String, isFunction: Bool, _ action: @escaping () -> Void) -> UIButton {
+    private func makeKey(_ title: String, isFunction: Bool, addTap: Bool = true, _ action: (() -> Void)? = nil) -> UIButton {
         let b = UIButton(type: .system)
         b.setTitle(title, for: .normal)
         b.setTitleColor(.black, for: .normal)
         b.titleLabel?.font = .systemFont(ofSize: title == "space" || title == "return" ? 14 : 18, weight: .medium)
         b.backgroundColor = isFunction ? UIColor(white: 0.72, alpha: 1) : .white
         b.layer.cornerRadius = 6
-        b.addAction(UIAction { _ in action() }, for: .touchUpInside)
+        if addTap, let action {
+            b.addAction(UIAction { _ in action() }, for: .touchUpInside)
+        }
         return b
+    }
+
+    private func enableRepeatDelete(on button: UIButton, _ handler: @escaping () -> Void) {
+        final class TimerBox {
+            var timer: Timer?
+        }
+        let box = TimerBox()
+        button.addAction(UIAction { _ in
+            handler()
+            box.timer?.invalidate()
+            let delay = Timer(timeInterval: 0.4, repeats: false) { _ in
+                box.timer?.invalidate()
+                let fast = Timer(timeInterval: 0.07, repeats: true) { _ in
+                    handler()
+                }
+                RunLoop.main.add(fast, forMode: .common)
+                box.timer = fast
+            }
+            RunLoop.main.add(delay, forMode: .common)
+            box.timer = delay
+        }, for: .touchDown)
+        let stop = UIAction { _ in
+            box.timer?.invalidate()
+            box.timer = nil
+        }
+        button.addAction(stop, for: .touchUpInside)
+        button.addAction(stop, for: .touchUpOutside)
+        button.addAction(stop, for: .touchCancel)
     }
 }
 
