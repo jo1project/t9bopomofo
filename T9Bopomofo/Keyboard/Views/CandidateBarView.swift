@@ -4,11 +4,13 @@ import ObjectiveC
 final class CandidateBarView: UIView {
     var onSelect: ((Candidate) -> Void)?
     var onToggleExpand: (() -> Void)?
+    var onDismissKeyboard: (() -> Void)?
 
     private let scroll = UIScrollView()
     private let stack = UIStackView()
     private let preeditLabel = UILabel()
     private let expandButton = UIButton(type: .system)
+    private let dismissButton = UIButton(type: .system)
     private(set) var isExpanded = false
 
     override init(frame: CGRect) {
@@ -26,6 +28,15 @@ final class CandidateBarView: UIView {
             self?.onToggleExpand?()
         }, for: .touchUpInside)
 
+        dismissButton.setTitle("↓", for: .normal)
+        dismissButton.titleLabel?.font = .systemFont(ofSize: 18, weight: .semibold)
+        dismissButton.setTitleColor(.darkGray, for: .normal)
+        dismissButton.translatesAutoresizingMaskIntoConstraints = false
+        dismissButton.accessibilityLabel = "隱藏鍵盤"
+        dismissButton.addAction(UIAction { [weak self] _ in
+            self?.onDismissKeyboard?()
+        }, for: .touchUpInside)
+
         scroll.translatesAutoresizingMaskIntoConstraints = false
         scroll.showsHorizontalScrollIndicator = false
         stack.axis = .horizontal
@@ -36,15 +47,21 @@ final class CandidateBarView: UIView {
         addSubview(preeditLabel)
         addSubview(scroll)
         addSubview(expandButton)
+        addSubview(dismissButton)
 
         NSLayoutConstraint.activate([
             preeditLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
             preeditLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
             preeditLabel.widthAnchor.constraint(lessThanOrEqualToConstant: 80),
 
-            expandButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -2),
+            dismissButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -2),
+            dismissButton.centerYAnchor.constraint(equalTo: centerYAnchor),
+            dismissButton.widthAnchor.constraint(equalToConstant: 34),
+            dismissButton.heightAnchor.constraint(equalToConstant: 36),
+
+            expandButton.trailingAnchor.constraint(equalTo: dismissButton.leadingAnchor, constant: -2),
             expandButton.centerYAnchor.constraint(equalTo: centerYAnchor),
-            expandButton.widthAnchor.constraint(equalToConstant: 36),
+            expandButton.widthAnchor.constraint(equalToConstant: 34),
             expandButton.heightAnchor.constraint(equalToConstant: 36),
 
             scroll.leadingAnchor.constraint(equalTo: preeditLabel.trailingAnchor, constant: 6),
@@ -77,11 +94,20 @@ final class CandidateBarView: UIView {
         }
         for (idx, c) in items.enumerated() {
             let btn = UIButton(type: .system)
-            btn.setTitle(c.text, for: .normal)
-            btn.titleLabel?.font = .systemFont(ofSize: 20, weight: idx == 0 ? .semibold : .regular)
-            btn.setTitleColor(.black, for: .normal)
+            if c.source == .llm {
+                btn.setTitle("✦ \(c.text)", for: .normal)
+                btn.titleLabel?.font = .systemFont(ofSize: 18, weight: .semibold)
+                btn.setTitleColor(UIColor(red: 0.12, green: 0.35, blue: 0.55, alpha: 1), for: .normal)
+                btn.backgroundColor = UIColor(red: 0.82, green: 0.91, blue: 1.0, alpha: 1)
+                btn.layer.borderWidth = 1
+                btn.layer.borderColor = UIColor(red: 0.45, green: 0.68, blue: 0.92, alpha: 1).cgColor
+            } else {
+                btn.setTitle(c.text, for: .normal)
+                btn.titleLabel?.font = .systemFont(ofSize: 20, weight: idx == 0 ? .semibold : .regular)
+                btn.setTitleColor(.black, for: .normal)
+                btn.backgroundColor = UIColor.white.withAlphaComponent(0.75)
+            }
             btn.contentEdgeInsets = UIEdgeInsets(top: 6, left: 12, bottom: 6, right: 12)
-            btn.backgroundColor = UIColor.white.withAlphaComponent(0.75)
             btn.layer.cornerRadius = 8
             btn.addTarget(self, action: #selector(tap(_:)), for: .touchUpInside)
             stack.addArrangedSubview(btn)
@@ -148,10 +174,19 @@ final class CandidatePanelView: UIView {
                 stack.addArrangedSubview(row!)
             }
             let btn = UIButton(type: .system)
-            btn.setTitle(c.text, for: .normal)
-            btn.setTitleColor(.black, for: .normal)
-            btn.titleLabel?.font = .systemFont(ofSize: 20, weight: idx == 0 ? .semibold : .regular)
-            btn.backgroundColor = .white
+            if c.source == .llm {
+                btn.setTitle("✦\(c.text)", for: .normal)
+                btn.setTitleColor(UIColor(red: 0.12, green: 0.35, blue: 0.55, alpha: 1), for: .normal)
+                btn.backgroundColor = UIColor(red: 0.82, green: 0.91, blue: 1.0, alpha: 1)
+                btn.layer.borderWidth = 1
+                btn.layer.borderColor = UIColor(red: 0.45, green: 0.68, blue: 0.92, alpha: 1).cgColor
+                btn.titleLabel?.font = .systemFont(ofSize: 17, weight: .semibold)
+            } else {
+                btn.setTitle(c.text, for: .normal)
+                btn.setTitleColor(.black, for: .normal)
+                btn.backgroundColor = .white
+                btn.titleLabel?.font = .systemFont(ofSize: 20, weight: idx == 0 ? .semibold : .regular)
+            }
             btn.layer.cornerRadius = 8
             btn.heightAnchor.constraint(equalToConstant: 44).isActive = true
             btn.addAction(UIAction { [weak self] _ in self?.onSelect?(c) }, for: .touchUpInside)

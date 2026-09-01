@@ -61,6 +61,9 @@ final class KeyboardViewController: UIInputViewController {
         candidateBar.onToggleExpand = { [weak self] in
             self?.toggleCandidatesExpanded()
         }
+        candidateBar.onDismissKeyboard = { [weak self] in
+            self?.dismissKeyboard()
+        }
 
         engine.onCandidatesChanged = { [weak self] in
             self?.reloadCandidates()

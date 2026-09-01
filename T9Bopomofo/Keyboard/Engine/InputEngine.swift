@@ -141,6 +141,12 @@ final class InputEngine: ObservableObject {
     }
 
     func selectCandidate(_ candidate: Candidate) -> String {
+        // Next-word suggestions (local / LLM) are not Rime candidates.
+        if candidate.source == .prediction || candidate.source == .llm
+            || candidate.id.hasPrefix("pred-") || candidate.id.hasPrefix("llm-") {
+            return commitSuggestion(candidate.text)
+        }
+
         if usingRime {
             let idx: Int = {
                 if candidate.id.hasPrefix("rime-"),
@@ -162,7 +168,11 @@ final class InputEngine: ObservableObject {
             return text
         }
 
-        let text = candidate.text
+        return commitSuggestion(candidate.text)
+    }
+
+    private func commitSuggestion(_ text: String) -> String {
+        guard !text.isEmpty else { return "" }
         userLexicon.recordCommit(text, previous: lastCommitted.isEmpty ? nil : lastCommitted)
         lastCommitted = text
         clearComposing()
@@ -199,7 +209,7 @@ final class InputEngine: ObservableObject {
                         text: w,
                         reading: "LLM",
                         score: 900 - Double(i),
-                        source: .prediction
+                        source: .llm
                     ))
                 }
                 self.candidates = merged

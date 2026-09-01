@@ -23,5 +23,6 @@ struct Candidate: Identifiable, Hashable, Sendable {
         case fuzzyMissing
         case user
         case prediction
+        case llm
     }
 }

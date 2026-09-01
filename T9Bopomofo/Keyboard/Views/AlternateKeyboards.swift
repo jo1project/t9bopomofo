@@ -266,50 +266,117 @@ final class EmojiKeyboardView: UIView {
     var onInsert: ((String) -> Void)?
     var onMode: ((KeyboardMode) -> Void)?
 
-    private let emojis = ["😀", "😂", "😍", "🤔", "👍", "🙏", "🔥", "✨", "🎉", "❤️", "💯", "🥲", "👏", "🙌", "🍔", "☕"]
+    private let emojis: [String] = [
+        // smileys
+        "😀", "😃", "😄", "😁", "😆", "😅", "🤣", "😂",
+        "🙂", "😉", "😊", "😇", "🥰", "😍", "🤩", "😘",
+        "😗", "😚", "😙", "🥲", "😋", "😛", "😜", "🤪",
+        "😝", "🤑", "🤗", "🤭", "🤫", "🤔", "🤐", "🤨",
+        "😐", "😑", "😶", "😏", "😒", "🙄", "😬", "😮‍💨",
+        "🤥", "😌", "😔", "😪", "🤤", "😴", "😷", "🤒",
+        "🤕", "🤢", "🤮", "🥵", "🥶", "🥴", "😵", "🤯",
+        "🤠", "🥳", "🥸", "😎", "🤓", "🧐", "😕", "😟",
+        "🙁", "😮", "😯", "😲", "😳", "🥺", "😦", "😧",
+        "😨", "😰", "😥", "😢", "😭", "😱", "😖", "😣",
+        "😞", "😓", "😩", "😫", "🥱", "😤", "😡", "😠",
+        // gestures / people
+        "👍", "👎", "👌", "✌️", "🤞", "🤟", "🤘", "🤙",
+        "👏", "🙌", "👐", "🤲", "🤝", "🙏", "💪", "🦾",
+        "👋", "🤚", "🖐️", "✋", "🖖", "👈", "👉", "👆",
+        "👇", "☝️", "🫵", "👀", "👁️", "💋", "💘", "💝",
+        // hearts / symbols
+        "❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍",
+        "💔", "❣️", "💕", "💞", "💓", "💗", "💖", "✨",
+        "⭐", "🌟", "💫", "🔥", "💥", "💢", "💯", "✅",
+        "❌", "❓", "❗", "💤", "🎉", "🎊", "🎈", "🎁",
+        // food / daily
+        "🍎", "🍊", "🍋", "🍌", "🍉", "🍇", "🍓", "🍑",
+        "🍔", "🍟", "🍕", "🌭", "🍜", "🍣", "🍙", "🍰",
+        "☕", "🍵", "🧋", "🍺", "🍻", "🥂", "🍷", "🥤",
+        // nature / travel
+        "☀️", "🌙", "⭐️", "☁️", "🌧️", "❄️", "🌈", "🌊",
+        "🌸", "🌹", "🌻", "🍀", "🐶", "🐱", "🐼", "🦊",
+        "🏠", "🚗", "✈️", "🚀", "⏰", "📱", "💻", "🎧",
+    ]
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        let root = UIStackView()
-        root.axis = .vertical
-        root.spacing = 8
-        root.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(root)
-        NSLayoutConstraint.activate([
-            root.topAnchor.constraint(equalTo: topAnchor),
-            root.leadingAnchor.constraint(equalTo: leadingAnchor),
-            root.trailingAnchor.constraint(equalTo: trailingAnchor),
-            root.bottomAnchor.constraint(equalTo: bottomAnchor),
-        ])
-
-        let grid = UIStackView()
-        grid.axis = .vertical
-        grid.spacing = 6
-        grid.distribution = .fillEqually
-        for chunk in stride(from: 0, to: emojis.count, by: 4).map({ Array(emojis[$0..<min($0+4, emojis.count)]) }) {
-            let row = UIStackView()
-            row.axis = .horizontal
-            row.distribution = .fillEqually
-            row.spacing = 6
-            for e in chunk {
-                let b = UIButton(type: .system)
-                b.setTitle(e, for: .normal)
-                b.titleLabel?.font = .systemFont(ofSize: 28)
-                b.addAction(UIAction { [weak self] _ in self?.onInsert?(e) }, for: .touchUpInside)
-                row.addArrangedSubview(b)
-            }
-            grid.addArrangedSubview(row)
-        }
-        root.addArrangedSubview(grid)
+        backgroundColor = UIColor(white: 0.86, alpha: 1)
 
         let bottom = UIStackView()
         bottom.axis = .horizontal
+        bottom.spacing = 4
         bottom.distribution = .fillEqually
+        bottom.translatesAutoresizingMaskIntoConstraints = false
+
         let back = UIButton(type: .system)
         back.setTitle("注音", for: .normal)
+        back.setTitleColor(.black, for: .normal)
+        back.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
+        back.backgroundColor = UIColor(white: 0.72, alpha: 1)
+        back.layer.cornerRadius = 6
         back.addAction(UIAction { [weak self] _ in self?.onMode?(.zhuyin) }, for: .touchUpInside)
+
+        let en = UIButton(type: .system)
+        en.setTitle("EN", for: .normal)
+        en.setTitleColor(.black, for: .normal)
+        en.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
+        en.backgroundColor = UIColor(white: 0.72, alpha: 1)
+        en.layer.cornerRadius = 6
+        en.addAction(UIAction { [weak self] _ in self?.onMode?(.english) }, for: .touchUpInside)
+
         bottom.addArrangedSubview(back)
-        root.addArrangedSubview(bottom)
+        bottom.addArrangedSubview(en)
+        addSubview(bottom)
+
+        let scroll = UIScrollView()
+        scroll.translatesAutoresizingMaskIntoConstraints = false
+        scroll.showsVerticalScrollIndicator = true
+        addSubview(scroll)
+
+        let grid = UIStackView()
+        grid.axis = .vertical
+        grid.spacing = 4
+        grid.translatesAutoresizingMaskIntoConstraints = false
+        scroll.addSubview(grid)
+
+        let cols = 8
+        for chunk in stride(from: 0, to: emojis.count, by: cols).map({ Array(emojis[$0..<min($0 + cols, emojis.count)]) }) {
+            let row = UIStackView()
+            row.axis = .horizontal
+            row.distribution = .fillEqually
+            row.spacing = 2
+            for e in chunk {
+                let b = UIButton(type: .system)
+                b.setTitle(e, for: .normal)
+                b.titleLabel?.font = .systemFont(ofSize: 26)
+                b.addAction(UIAction { [weak self] _ in self?.onInsert?(e) }, for: .touchUpInside)
+                row.addArrangedSubview(b)
+            }
+            while row.arrangedSubviews.count < cols {
+                row.addArrangedSubview(UIView())
+            }
+            grid.addArrangedSubview(row)
+            row.heightAnchor.constraint(equalToConstant: 40).isActive = true
+        }
+
+        NSLayoutConstraint.activate([
+            bottom.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
+            bottom.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -2),
+            bottom.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -2),
+            bottom.heightAnchor.constraint(equalToConstant: 36),
+
+            scroll.topAnchor.constraint(equalTo: topAnchor, constant: 2),
+            scroll.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
+            scroll.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -2),
+            scroll.bottomAnchor.constraint(equalTo: bottom.topAnchor, constant: -4),
+
+            grid.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor),
+            grid.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor),
+            grid.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor),
+            grid.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor),
+            grid.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor),
+        ])
     }
 
     required init?(coder: NSCoder) { fatalError() }

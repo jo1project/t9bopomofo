@@ -42,10 +42,10 @@ struct SetupView: View {
                         Text("已知行為").font(.headline)
                         Text("• 選詞：librime + octagram；候選 ▼ 可展開")
                         Text("• 注音鍵（聲母／韻母）加大；聲調鍵與一般鍵同為 26pt")
-                        Text("• 。點＝句號／長按標點；123 長按表情；空格/EN")
+                        Text("• 。點＝句號／長按標點；123 長按表情；空格/EN；候選列 ↓ 隱藏鍵盤")
                         Text("• 英文鍵盤：⇧ 點一下大寫下一個、再點 ⇪ 鎖定")
                         Text("• 備份：本機 JSON 匯出／匯入，可選 iCloud KVS")
-                        Text("• LLM：OpenAI 需付費額度；也可用 Groq 等免費相容 API")
+                        Text("• LLM：淺藍 ✦ 標記聯想詞；OpenAI 付費／Groq 免費相容")
                     }
                 }
                 .padding()

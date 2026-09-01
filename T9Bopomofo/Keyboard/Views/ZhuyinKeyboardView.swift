@@ -184,6 +184,8 @@ final class KeyButton: UIButton {
     private var repeatTimer: Timer?
     private var repeatHandler: (() -> Void)?
     private var calloutActive = false
+    /// After a callout commit, ignore the following touchUpInside (would re-fire primary key e.g. 。).
+    private var suppressNextTap = false
 
     init(label: String, action: ZhuyinPhoneLayout.KeyAction, style: Style) {
         self.keyAction = action
@@ -252,6 +254,10 @@ final class KeyButton: UIButton {
     }
 
     @objc private func tapped() {
+        if suppressNextTap {
+            suppressNextTap = false
+            return
+        }
         guard !calloutActive else { return }
         // Backspace uses touchDown repeat path instead.
         guard repeatHandler == nil else { return }
@@ -272,11 +278,13 @@ final class KeyButton: UIButton {
         case .ended:
             if calloutActive {
                 onCalloutEnd?()
+                suppressNextTap = true
             }
             calloutActive = false
         case .cancelled, .failed:
             if calloutActive {
                 onCalloutCancel?()
+                suppressNextTap = true
             }
             calloutActive = false
         default:
