@@ -7,8 +7,8 @@ final class ZhuyinKeyboardView: UIView {
     private let interKey: CGFloat = 6
     private let interRow: CGFloat = 7
     private let sideGapBeforeFunc: CGFloat = 10
-    private let sideFrac: CGFloat = 0.155
-    private let midFrac: CGFloat = 0.230
+    private let sideFrac: CGFloat = 0.175
+    private let midFrac: CGFloat = 0.220
 
     private var keyButtons: [KeyButton] = []
     private let separator = UIView()
@@ -190,7 +190,7 @@ final class KeyButton: UIButton {
         setTitleColor(.black, for: .normal)
         let fontSize: CGFloat
         switch style {
-        case .tone: fontSize = 28
+        case .tone: fontSize = 34
         case .function: fontSize = label == "換行" ? 15 : 16
         case .zhuyin:
             if label.contains("/") {
@@ -199,11 +199,16 @@ final class KeyButton: UIButton {
                 fontSize = label.count >= 4 ? 14 : 16
             }
         }
-        titleLabel?.font = .systemFont(ofSize: fontSize, weight: style == .tone ? .semibold : .medium)
-        titleLabel?.numberOfLines = 2
+        titleLabel?.font = .systemFont(ofSize: fontSize, weight: style == .tone ? .bold : .medium)
+        titleLabel?.numberOfLines = style == .tone ? 1 : 2
         titleLabel?.textAlignment = .center
-        titleLabel?.adjustsFontSizeToFitWidth = true
-        titleLabel?.minimumScaleFactor = 0.65
+        // Tone marks must stay large on narrow keys — don't auto-shrink.
+        if style == .tone {
+            titleLabel?.adjustsFontSizeToFitWidth = false
+        } else {
+            titleLabel?.adjustsFontSizeToFitWidth = true
+            titleLabel?.minimumScaleFactor = 0.65
+        }
 
         switch style {
         case .function:

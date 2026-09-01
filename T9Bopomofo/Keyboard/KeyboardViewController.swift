@@ -62,6 +62,10 @@ final class KeyboardViewController: UIInputViewController {
             self?.toggleCandidatesExpanded()
         }
 
+        engine.onCandidatesChanged = { [weak self] in
+            self?.reloadCandidates()
+        }
+
         NotificationCenter.default.addObserver(
             forName: .t9SwitchEmoji,
             object: nil,

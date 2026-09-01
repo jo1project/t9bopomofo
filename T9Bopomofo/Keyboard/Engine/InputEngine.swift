@@ -16,6 +16,10 @@ final class InputEngine: ObservableObject {
     private let rime = RimeEngine.shared
     private var loaded = false
     private var candidateLimit = 12
+    private var llmTask: Task<Void, Never>?
+
+    /// Fired on main when candidates change (e.g. async LLM).
+    var onCandidatesChanged: (() -> Void)?
 
     init(userLexicon: UserLexicon = UserLexicon()) {
         self.userLexicon = userLexicon
@@ -138,7 +142,6 @@ final class InputEngine: ObservableObject {
 
     func selectCandidate(_ candidate: Candidate) -> String {
         if usingRime {
-            // Candidate.id for Rime is "rime-<index>"
             let idx: Int = {
                 if candidate.id.hasPrefix("rime-"),
                    let n = Int(candidate.id.dropFirst(5)) {
@@ -152,6 +155,10 @@ final class InputEngine: ObservableObject {
                 lastCommitted = text
             }
             syncFromRime()
+            if !text.isEmpty, !isComposing {
+                applyLocalPredictions(after: text)
+                scheduleLLMPredictions(after: text)
+            }
             return text
         }
 
@@ -159,11 +166,46 @@ final class InputEngine: ObservableObject {
         userLexicon.recordCommit(text, previous: lastCommitted.isEmpty ? nil : lastCommitted)
         lastCommitted = text
         clearComposing()
+        applyLocalPredictions(after: text)
+        scheduleLLMPredictions(after: text)
+        return text
+    }
+
+    private func applyLocalPredictions(after text: String) {
         let preds = userLexicon.predictions(after: text)
         candidates = preds.enumerated().map { idx, w in
             Candidate(id: "pred-\(idx)-\(w)", text: w, reading: "", score: 1000 - Double(idx), source: .prediction)
         }
-        return text
+        onCandidatesChanged?()
+    }
+
+    private func scheduleLLMPredictions(after text: String) {
+        llmTask?.cancel()
+        guard AppSettings.shared.canUseLLM else { return }
+        let local = candidates
+        llmTask = Task { [weak self] in
+            let remote = await LLMPredictor.shared.suggest(after: text, limit: 5)
+            guard !Task.isCancelled, !remote.isEmpty else { return }
+            await MainActor.run {
+                guard let self else { return }
+                // Only apply if still idle (not composing) and context matches.
+                guard !self.isComposing, self.lastCommitted == text else { return }
+                var seen = Set(local.map(\.text))
+                var merged = local
+                for (i, w) in remote.enumerated() where !seen.contains(w) {
+                    seen.insert(w)
+                    merged.append(Candidate(
+                        id: "llm-\(i)-\(w)",
+                        text: w,
+                        reading: "LLM",
+                        score: 900 - Double(i),
+                        source: .prediction
+                    ))
+                }
+                self.candidates = merged
+                self.onCandidatesChanged?()
+            }
+        }
     }
 
     func insertPassthroughAndClear(_ text: String) -> String {

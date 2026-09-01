@@ -23,6 +23,7 @@ targets:
     platform: iOS
     sources:
       - path: T9Bopomofo/App
+      - path: T9Bopomofo/Shared
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.jo1project.t9bopomofo
       INFOPLIST_FILE: T9Bopomofo/App/Info.plist
