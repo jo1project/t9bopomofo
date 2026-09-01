@@ -56,7 +56,7 @@ final class KeyboardViewController: UIInputViewController {
             let text = self.engine.selectCandidate(candidate)
             self.textDocumentProxy.insertText(text)
             self.collapseCandidates()
-            self.reloadCandidates()
+            self.refreshPredictionsAfterCommit(inserted: text)
         }
         candidateBar.onToggleExpand = { [weak self] in
             self?.toggleCandidatesExpanded()
@@ -86,11 +86,48 @@ final class KeyboardViewController: UIInputViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         engine.prepare(bundle: Bundle(for: KeyboardViewController.self))
+        AppSettings.shared.reloadFromDisk()
+        if !engine.isComposing {
+            refreshPredictionsFromDocument()
+        }
     }
 
     private func reloadCandidates() {
-        candidateBar.setCandidates(engine.candidates, preedit: engine.preeditDisplay)
+        candidateBar.setCandidates(
+            engine.candidates,
+            preedit: engine.preeditDisplay,
+            status: engine.isComposing ? "" : engine.predictionStatus
+        )
         candidatePanel?.setCandidates(engine.candidates)
+    }
+
+    /// After committing text, ask LLM using document tail (not only the last word).
+    private func refreshPredictionsAfterCommit(inserted: String) {
+        reloadCandidates()
+        guard !inserted.isEmpty else { return }
+        let before = textDocumentProxy.documentContextBeforeInput ?? ""
+        let context = before.isEmpty ? inserted : before
+        engine.requestNextWordPredictions(context: context, hasNetworkAccess: hasFullAccess)
+        reloadCandidates()
+    }
+
+    private func refreshPredictionsFromDocument() {
+        let before = textDocumentProxy.documentContextBeforeInput ?? ""
+        let tail = before.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !tail.isEmpty else {
+            reloadCandidates()
+            return
+        }
+        // Only auto-trigger when the tail looks like CJK (avoid English spam).
+        let hasCJK = tail.unicodeScalars.contains { s in
+            (0x4E00...0x9FFF).contains(s.value) || (0x3400...0x4DBF).contains(s.value)
+        }
+        guard hasCJK else {
+            reloadCandidates()
+            return
+        }
+        engine.requestNextWordPredictions(context: tail, hasNetworkAccess: hasFullAccess)
+        reloadCandidates()
     }
 
     private func toggleCandidatesExpanded() {
@@ -122,7 +159,7 @@ final class KeyboardViewController: UIInputViewController {
             let text = self.engine.selectCandidate(candidate)
             self.textDocumentProxy.insertText(text)
             self.collapseCandidates()
-            self.reloadCandidates()
+            self.refreshPredictionsAfterCommit(inserted: text)
         }
         panel.setCandidates(engine.candidates)
         candidatePanel = panel

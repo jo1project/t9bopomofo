@@ -11,14 +11,16 @@ final class CandidateBarView: UIView {
     private let preeditLabel = UILabel()
     private let expandButton = UIButton(type: .system)
     private let dismissButton = UIButton(type: .system)
+    private var preeditMaxWidth: NSLayoutConstraint?
     private(set) var isExpanded = false
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        preeditLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        preeditLabel.font = .systemFont(ofSize: 12, weight: .medium)
         preeditLabel.textColor = .darkGray
         preeditLabel.translatesAutoresizingMaskIntoConstraints = false
         preeditLabel.lineBreakMode = .byTruncatingTail
+        preeditLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
         expandButton.setTitle("▼", for: .normal)
         expandButton.titleLabel?.font = .systemFont(ofSize: 14, weight: .semibold)
@@ -49,10 +51,13 @@ final class CandidateBarView: UIView {
         addSubview(expandButton)
         addSubview(dismissButton)
 
+        let maxW = preeditLabel.widthAnchor.constraint(lessThanOrEqualToConstant: 80)
+        preeditMaxWidth = maxW
+
         NSLayoutConstraint.activate([
             preeditLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
             preeditLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
-            preeditLabel.widthAnchor.constraint(lessThanOrEqualToConstant: 80),
+            maxW,
 
             dismissButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -2),
             dismissButton.centerYAnchor.constraint(equalTo: centerYAnchor),
@@ -84,8 +89,23 @@ final class CandidateBarView: UIView {
         expandButton.setTitle(expanded ? "▲" : "▼", for: .normal)
     }
 
-    func setCandidates(_ items: [Candidate], preedit: String) {
-        preeditLabel.text = preedit
+    func setCandidates(_ items: [Candidate], preedit: String, status: String = "") {
+        if !preedit.isEmpty {
+            preeditLabel.text = preedit
+            preeditLabel.textColor = .darkGray
+            preeditMaxWidth?.constant = 80
+        } else if !status.isEmpty {
+            preeditLabel.text = status
+            preeditLabel.textColor = status.hasPrefix("LLM失敗") || status.contains("需開啟") || status.contains("未設定")
+                ? .systemOrange
+                : .systemBlue
+            preeditMaxWidth?.constant = 150
+        } else {
+            preeditLabel.text = ""
+            preeditLabel.textColor = .darkGray
+            preeditMaxWidth?.constant = 80
+        }
+
         expandButton.isEnabled = !items.isEmpty || !preedit.isEmpty
         expandButton.alpha = expandButton.isEnabled ? 1 : 0.35
         stack.arrangedSubviews.forEach {

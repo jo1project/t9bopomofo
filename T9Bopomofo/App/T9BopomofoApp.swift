@@ -167,14 +167,18 @@ struct LLMSettingsView: View {
     @State private var apiKey = AppSettings.shared.llmAPIKey
     @State private var model = AppSettings.shared.llmModel
     @State private var testStatus = ""
+    @State private var diagnostics = AppSettings.shared.llmDiagnostics
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
                     Toggle("啟用 LLM 聯想", isOn: $enabled)
-                        .onChange(of: enabled) { _, v in AppSettings.shared.llmEnabled = v }
-                    Text("上屏後，在本機 bigram 之外再向相容 API 要接續詞。需開啟鍵盤「完整取用」。")
+                        .onChange(of: enabled) { _, v in
+                            AppSettings.shared.llmEnabled = v
+                            diagnostics = AppSettings.shared.llmDiagnostics
+                        }
+                    Text("選詞上屏後會出現淺藍 ✦ 聯想。需鍵盤「完整取用」，且 App 與鍵盤共用 App Group 設定。")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -185,10 +189,10 @@ struct LLMSettingsView: View {
                         .foregroundStyle(.secondary)
                     Button("填入 Groq 範例") {
                         baseURL = "https://api.groq.com/openai/v1"
-                        // Groq 會輪替可用 model；舊的 llama-3.1-8b-instant 已下架
                         model = "groq/compound-mini"
                         AppSettings.shared.llmBaseURL = baseURL
                         AppSettings.shared.llmModel = model
+                        diagnostics = AppSettings.shared.llmDiagnostics
                         testStatus = "已填 Groq URL／Model（groq/compound-mini），請貼上 console.groq.com 的 Key"
                     }
                 }
@@ -196,15 +200,37 @@ struct LLMSettingsView: View {
                     TextField("Base URL", text: $baseURL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                        .onChange(of: baseURL) { _, v in AppSettings.shared.llmBaseURL = v }
+                        .onChange(of: baseURL) { _, v in
+                            AppSettings.shared.llmBaseURL = v
+                            diagnostics = AppSettings.shared.llmDiagnostics
+                        }
                     SecureField("API Key（必填）", text: $apiKey)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                        .onChange(of: apiKey) { _, v in AppSettings.shared.llmAPIKey = v }
+                        .onChange(of: apiKey) { _, v in
+                            AppSettings.shared.llmAPIKey = v
+                            diagnostics = AppSettings.shared.llmDiagnostics
+                        }
                     TextField("Model", text: $model)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                        .onChange(of: model) { _, v in AppSettings.shared.llmModel = v }
+                        .onChange(of: model) { _, v in
+                            AppSettings.shared.llmModel = v
+                            diagnostics = AppSettings.shared.llmDiagnostics
+                        }
+                }
+                Section("診斷（鍵盤讀得到嗎）") {
+                    Text(diagnostics)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    Button("重新檢查") {
+                        AppSettings.shared.reloadFromDisk()
+                        enabled = AppSettings.shared.llmEnabled
+                        baseURL = AppSettings.shared.llmBaseURL
+                        apiKey = AppSettings.shared.llmAPIKey
+                        model = AppSettings.shared.llmModel
+                        diagnostics = AppSettings.shared.llmDiagnostics
+                    }
                 }
                 Section {
                     Button("測試聯想「你好」") {
@@ -226,6 +252,10 @@ struct LLMSettingsView: View {
                 }
             }
             .navigationTitle("LLM 預測")
+            .onAppear {
+                AppSettings.shared.reloadFromDisk()
+                diagnostics = AppSettings.shared.llmDiagnostics
+            }
         }
     }
 }

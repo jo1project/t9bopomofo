@@ -10,6 +10,8 @@ final class InputEngine: ObservableObject {
     @Published private(set) var preeditDisplay: String = ""
     @Published private(set) var lastCommitted: String = ""
     @Published private(set) var usingRime: Bool = false
+    /// Shown in candidate bar when idle (LLM loading / errors / hints).
+    @Published private(set) var predictionStatus: String = ""
 
     private let lexicon = DictionaryLoader()
     private let userLexicon: UserLexicon
@@ -17,6 +19,7 @@ final class InputEngine: ObservableObject {
     private var loaded = false
     private var candidateLimit = 12
     private var llmTask: Task<Void, Never>?
+    private var lastPredictionContext: String = ""
 
     /// Fired on main when candidates change (e.g. async LLM).
     var onCandidatesChanged: (() -> Void)?
@@ -162,8 +165,9 @@ final class InputEngine: ObservableObject {
             }
             syncFromRime()
             if !text.isEmpty, !isComposing {
+                lastPredictionContext = text
                 applyLocalPredictions(after: text)
-                scheduleLLMPredictions(after: text)
+                // LLM is scheduled by KeyboardViewController with hasFullAccess + document context.
             }
             return text
         }
@@ -175,9 +179,9 @@ final class InputEngine: ObservableObject {
         guard !text.isEmpty else { return "" }
         userLexicon.recordCommit(text, previous: lastCommitted.isEmpty ? nil : lastCommitted)
         lastCommitted = text
+        lastPredictionContext = text
         clearComposing()
         applyLocalPredictions(after: text)
-        scheduleLLMPredictions(after: text)
         return text
     }
 
@@ -189,20 +193,65 @@ final class InputEngine: ObservableObject {
         onCandidatesChanged?()
     }
 
-    private func scheduleLLMPredictions(after text: String) {
+    /// Ask for next-word suggestions. `context` should be the latest committed text
+    /// (or a short document tail). Requires Full Access for network.
+    func requestNextWordPredictions(context: String, hasNetworkAccess: Bool) {
+        let trimmed = Self.normalizeContext(context)
+        guard !trimmed.isEmpty else {
+            predictionStatus = ""
+            return
+        }
+        guard !isComposing else { return }
+
+        lastCommitted = trimmed
+        lastPredictionContext = trimmed
+        applyLocalPredictions(after: trimmed)
+        scheduleLLMPredictions(after: trimmed, hasNetworkAccess: hasNetworkAccess)
+    }
+
+    private static func normalizeContext(_ raw: String) -> String {
+        let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return "" }
+        // Prefer last ~24 chars / last short clause for LLM context.
+        if t.count <= 24 { return t }
+        return String(t.suffix(24))
+    }
+
+    private func scheduleLLMPredictions(after text: String, hasNetworkAccess: Bool = true) {
         llmTask?.cancel()
-        guard AppSettings.shared.canUseLLM else { return }
-        let local = candidates
+        AppSettings.shared.reloadFromDisk()
+        guard AppSettings.shared.canUseLLM else {
+            predictionStatus = AppSettings.shared.llmAPIKey.isEmpty
+                ? "LLM未設定：開App→LLM分頁"
+                : (AppSettings.shared.llmEnabled ? "" : "LLM已關閉")
+            onCandidatesChanged?()
+            return
+        }
+        guard hasNetworkAccess else {
+            predictionStatus = "需開啟「完整取用」才能LLM"
+            onCandidatesChanged?()
+            return
+        }
+
+        predictionStatus = "LLM…"
+        onCandidatesChanged?()
+        let local = candidates.filter { $0.source != .llm }
+        let token = text
         llmTask = Task { [weak self] in
-            let remote = await LLMPredictor.shared.suggest(after: text, limit: 5)
-            guard !Task.isCancelled, !remote.isEmpty else { return }
+            let result = await LLMPredictor.shared.suggestDetailed(after: token, limit: 5)
+            guard !Task.isCancelled else { return }
             await MainActor.run {
                 guard let self else { return }
-                // Only apply if still idle (not composing) and context matches.
-                guard !self.isComposing, self.lastCommitted == text else { return }
+                // Only apply if still idle and context matches.
+                guard !self.isComposing, self.lastPredictionContext == token else { return }
+                if result.words.isEmpty {
+                    self.predictionStatus = result.errorMessage.map { "LLM失敗：\($0)" } ?? "LLM無結果"
+                    self.onCandidatesChanged?()
+                    return
+                }
                 var seen = Set(local.map(\.text))
                 var merged = local
-                for (i, w) in remote.enumerated() where !seen.contains(w) {
+                for (i, w) in result.words.enumerated() where !seen.contains(w) {
                     seen.insert(w)
                     merged.append(Candidate(
                         id: "llm-\(i)-\(w)",
@@ -213,6 +262,7 @@ final class InputEngine: ObservableObject {
                     ))
                 }
                 self.candidates = merged
+                self.predictionStatus = ""
                 self.onCandidatesChanged?()
             }
         }
@@ -220,6 +270,7 @@ final class InputEngine: ObservableObject {
 
     func insertPassthroughAndClear(_ text: String) -> String {
         clearComposing()
+        predictionStatus = ""
         return text
     }
 
