@@ -1,0 +1,211 @@
+schema:
+  schema_id: bopomofo_t9
+  name: 注音九宮格
+  version: "10.5"
+
+# 自動聯想開關（萬象 user_predict.lua 實作，見 README）
+switches:
+  - name: prediction
+    states: [ 關閉預測, 開啟預測 ]
+    reset: 1
+
+engine:
+  processors:
+    - lua_processor@*wanxiang.user_predict*P   # 自動聯想（萬象 lua 實作）
+    - speller
+    - recognizer
+    - key_binder
+    - selector
+    - express_editor
+  segmentors:
+    - matcher
+    - abc_segmentor
+    - fallback_segmentor
+  translators:
+    - script_translator
+    - lua_translator@*wanxiang.user_predict*T  # 自動聯想候選
+  filters:
+    - lua_filter@t9_sort_filter
+    - lua_filter@*wanxiang.user_predict*F      # 聯想上下文調頻
+    - uniquifier
+
+speller:
+  alphabet: "abcdefghijklmnopqrstuvwxyz1234567890ABCDEIJKLMNOPSRVXZ›"
+  initials: "abcdefghijklmnopqrstuvwxyz1234567890ABCDEIJKLMNOPSRVXZ›"
+  use_space: false
+  delimiter: " '"
+  algebra:
+    - xform/^r5$/er5/
+    # 1. 先搬移可能衝突的字母 (ㄑ->A, ㄒ->B)
+    - xform/q/A/
+    - xform/x/B/
+
+    # 2. 基本注音轉換 (🌟 修復組合鼻音韻母)
+    - xform/yong/vP/    # ㄩㄥ (用)
+    - xform/iong/vP/    # ㄩㄥ (窘)
+    - xform/weng/uP/    # ㄨㄥ (翁)
+    - xform/ong/uP/     # ㄨㄥ (東)
+    - xform/ing/iP/     # ㄧㄥ (英)
+    - xform/^yu/v/
+    - xform/^yi?/i/
+    - xform/^wu?/u/
+    - xform/iu/iou/
+    - xform/ui/uei/
+    - xform/^([jAB])u/$1v/
+    - xform/([iuv])n/$1en/
+    - xform/^zhi?/Z/
+    - xform/^chi?/C/
+    - xform/^shi?/S/
+    - xform/^([zcsr])i/$1/
+    - xform/ai/I/
+    - xform/ei/J/
+    - xform/ao/K/
+    - xform/ou/L/
+    - xform/ang/O/
+    - xform/eng/P/
+    - xform/an/M/
+    - xform/en/N/
+    - xform/er/R/
+    - xform/eh/E/
+    - xform/([iv])e/$1E/
+
+    # 3. 聲調轉換 (放在最後，確保不會被前面的 xform 誤傷)
+    # 僅在前一碼為字母時轉換，避免誤傷 emoji 等純數字鍵碼（如 01294）
+    - xform/([a-zA-Z])1$/$1q/
+    - xform/([a-zA-Z])2$/$1w/
+    - xform/([a-zA-Z])3$/$1x/
+    - xform/([a-zA-Z])4$/$1y/
+    # 輕聲（第5聲）沒有聲調鍵，直接去除，使「的(de5)、了(le5)、豆腐(fu5)」等
+    # 輕聲字詞可用無聲調完整注音輸入
+    - xform/([a-zA-Z])5$/$1/
+
+    # 4. T9 模糊鍵映射
+    # 按鍵 1：ㄅ(b) ㄉ(d) ㄚ(a)
+    - derive/^[bd]/1/
+    - derive/a/1/
+    # 按鍵 2：ㄍ(g) ㄐ(j) ㄞ(I)
+    - derive/^[gj]/2/
+    - derive/I/2/
+    # 按鍵 3：ㄓ(Z) ㄗ(z) ㄢ(M) ㄦ(R)
+    - derive/^[Zz]/3/
+    - derive/[MR]/3/
+    # 按鍵 4：ㄆ(p) ㄊ(t) ㄛ(o)
+    - derive/^[pt]/4/
+    - derive/o/4/
+    # 按鍵 5：ㄎ(k) ㄑ(A) ㄟ(J)
+    - derive/^[kA]/5/
+    - derive/J/5/
+    # 按鍵 6：ㄔ(C) ㄘ(c) ㄣ(N) ㄧ(i)
+    - derive/^[Cc]/6/
+    - derive/[Ni]/6/
+    # 按鍵 7：ㄇ(m) ㄋ(n) ㄜ(e)
+    - derive/^[mn]/7/
+    - derive/e/7/
+    # 按鍵 8：ㄏ(h) ㄒ(B) ㄠ(K) ㄡ(L)
+    - derive/^[hB]/8/
+    - derive/[KL]/8/
+    # 按鍵 9：ㄕ(S) ㄙ(s) ㄤ(O) ㄨ(u)
+    - derive/^[Ss]/9/
+    - derive/[Ou]/9/
+    # 按鍵 0：ㄈ(f) ㄌ(l) ㄝ(E)
+    - derive/^[fl]/0/
+    - derive/E/0/
+    # 按鍵 v：ㄖ(r) ㄥ(P) ㄩ(v)
+    - derive/^r/v/
+    - derive/[Pv]/v/
+    
+    # 5. 結尾處理
+    - derive/[qwxy]$//
+    - derive/^(.).+$/$1/
+
+# 語法模型（librime-octagram，已鏈入 LibrimeKit 2.9.0）
+# 模型檔 zh-hant-t-essay-bgw.gram 由 Scripts/download-models.sh 下載
+grammar:
+  language: zh-hant-t-essay-bgw
+
+translator:
+  dictionary: bopomofo_t9
+  prism: bopomofo_t9_custom
+  enable_user_dict: true
+  # 說明：script_translator 的整句組句 (Poet) 是內建行為，分段選詞上屏後
+  # 整句會自動寫入使用者詞典（下次同編碼整句直接出現）。
+  # enable_sentence / enable_encoder / encode_commit_history / max_phrase_length
+  # 為 table_translator 專用選項，對 script_translator 無效，故不設定。
+  contextual_suggestions: true   # 啟用語法模型時取消此行註解
+  max_homophones: 7              # 啟用語法模型時取消此行註解（擴大同音詞搜索）
+  preedit_format:
+    # 先轉換所有符號
+    - xform/A/ㄑ/
+    - xform/B/ㄒ/
+    - xform/Z/ㄓ/
+    - xform/C/ㄔ/
+    - xform/S/ㄕ/
+    - xform/E/ㄝ/
+    - xform/I/ㄞ/
+    - xform/J/ㄟ/
+    - xform/K/ㄠ/
+    - xform/L/ㄡ/
+    - xform/M/ㄢ/
+    - xform/N/ㄣ/
+    - xform/O/ㄤ/
+    - xform/P/ㄥ/
+    - xform/R/ㄦ/
+    - xform/b/ㄅ/
+    - xform/p/ㄆ/
+    - xform/m/ㄇ/
+    - xform/f/ㄈ/
+    - xform/d/ㄉ/
+    - xform/t/ㄊ/
+    - xform/n/ㄋ/
+    - xform/l/ㄌ/
+    - xform/g/ㄍ/
+    - xform/k/ㄎ/
+    - xform/h/ㄏ/
+    - xform/j/ㄐ/
+    - xform/z/ㄗ/
+    - xform/c/ㄘ/
+    - xform/s/ㄙ/
+    - xform/r/ㄖ/
+    - xform/i/ㄧ/
+    - xform/u/ㄨ/
+    - xform/v/ㄩ/
+    - xform/a/ㄚ/
+    - xform/o/ㄛ/
+    - xform/e/ㄜ/
+    # 轉換聲調（q/w/x/y 只會由聲調鍵產生，中間音節的聲調也要顯示）
+    - xform/q/ˉ/
+    - xform/w/ˊ/
+    - xform/x/ˇ/
+    - xform/y/ˋ/
+    # 數字回顯
+    - xform/1/ㄅ/
+    - xform/2/ㄍ/
+    - xform/3/ㄓ/
+    - xform/4/ㄆ/
+    - xform/5/ㄎ/
+    - xform/6/ㄔ/
+    - xform/7/ㄇ/
+    - xform/8/ㄏ/
+    - xform/9/ㄕ/
+    - xform/0/ㄈ/
+    # 注意：T9 鍵 v 與精確碼 ㄩ 共用字元 v，已在前面統一顯示為 ㄩ
+
+key_binder:
+  import_preset: default
+  bindings:
+    - { when: composing, accept: Return, send: Shift+Return }
+
+recognizer:
+  import_preset: default
+  patterns:
+    abc: "^[a-zA-Z0-9]+$"
+
+# 自動聯想設定（lua/wanxiang/user_predict.lua：從你上屏的詞自動學習，
+# 資料存在使用者目錄 predict.userdb，剛安裝時沒有聯想、打幾次就會出現）
+user_predict:
+  db_name: predict
+  mobile_predict_style: post   # post=上屏後跳出聯想 / reorder=只做輸入調頻 / off=關閉
+  max_candidates: 6            # 一次最多顯示幾個聯想詞
+  max_predictions: 3           # 連續聯想最多幾輪
+  context_timeout: 30000       # 前後兩次上屏間隔在此毫秒內才視為同一語境並學習關聯
+                               # （lua 預設 5000ms，T9 打一個詞常超過 5 秒導致學不到東西）

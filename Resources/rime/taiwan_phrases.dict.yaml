@@ -1,0 +1,476 @@
+# Taiwan Mandarin phrases for bopomofo_t9
+# Focus: restaurants / bubble tea / daily TW terms / internet slang
+# encoding: utf-8
+
+---
+name: taiwan_phrases
+version: "2026.08.16"
+sort: by_weight
+...
+
+87	ba1 qi1	5000
+Buffet	ba1 fei4	5000
+CoCo都可	co1 co1 dou1 ke3	7000
+Dcard	D card	7000
+Foodpanda	food panda	7000
+LINE Pay	line pay	6500
+PO文	po1 wen2	8000
+PTT	P T T	7000
+Pi拍錢包	pi pai1 qian2 bao1	6000
+Uber Eats	uber eats	7000
+YouBike	you1 bai1	7000
+YouTuber	you1 tu1 ber3	7000
+cama咖啡	ka3 ma3 ka1 fei1	7000
+foodpanda	food panda	7000
+hot7	hot7	5000
+一風堂	yi1 feng1 tang2	7000
+三井	san1 jing3	6000
+三商巧福	san1 shang1 qiao3 fu2	8000
+三小	san1 xiao3	10000
+上車	shang4 che1	6000
+不87	bu4 ba1 qi1	6000
+不想上班	bu4 xiang3 shang4 ban1	8000
+不穩	bu4 wen3	7000
+不行啦	bu4 xing2 la5	6000
+不行	bu4 xing2	15000
+不是不行	bu2 shi4 bu4 xing2	16000
+不是吧	bu2 shi4 ba5	8000
+不是	bu2 shi4	14000
+不幸	bu2 xing4	5000
+
+不限時	bu4 xian4 shi2	8000
+中二	zhong1 er4	6000
+中肯	zhong1 ken3	8000
+串	chuan4	5000
+丹丹	dan1 dan1	7000
+丹丹漢堡	dan1 dan1 han4 bao3	9000
+五十嵐	wu3 shi2 lan2	10000
+五桐號	wu3 tong2 hao4	7000
+五樓	wu3 lou2	7000
+五樓神預測	wu3 lou2 shen2 yu4 ce4	5000
+人肉	ren2 rou4	5000
+什麼	shen2 me5	12000
+伯朗咖啡	bo2 lang3 ka1 fei1	7000
+低消	di1 xiao1	8000
+佛系	fo2 xi4	7000
+便利商店	bian4 li4 shang1 dian4	9000
+便當	bian4 dang1	12000
+假新聞	jia3 xin1 wen2	7000
+假的吧	jia3 de5 ba5	7000
+假訊息	jia3 xun4 xi2	7000
+停班停課	ting2 ban1 ting2 ke4	8000
+健保	jian4 bao3	11000
+健保卡	jian4 bao3 ka3	10000
+傻眼	sha3 yan3	7000
+優惠	you1 hui4	7000
+優食	you1 shi2	6000
+先下載	xian1 xia4 zai3	5000
+先存	xian1 cun2	5000
+先收藏	xian1 shou1 cang2	6000
+先跑	xian1 pao3	5000
+免運	mian3 yun4	8000
+內幕	nei4 mu4	6000
+內文	nei4 wen2	6000
+內用	nei4 yong4	8000
+全家	quan2 jia1	9000
+全聯	quan2 lian2	10000
+八卦板	ba1 gua4 ban3	8000
+八方雲集	ba1 fang1 yun2 ji2	9000
+出征	chu1 zheng1	7000
+出社會	chu1 she4 hui4	6000
+刈包	gua4 bao1	8000
+刷一波	shua1 yi4 bo1	6500
+刷存在感	shua1 cun2 zai4 gan3	7000
+劇透	ju4 tou4	8000
+勝文	sheng4 wen2	5000
+勞保	lao2 bao3	9000
+勞退	lao2 tui4	8000
+北七	bei3 qi1	9000
+北捷	bei3 jie2	9000
+原PO	yuan2 po1	9000
+原燒	yuan2 shao1	7000
+厭世	yan4 shi4	8000
+可不可	ke3 bu4 ke3	9000
+可不可熟成紅茶	ke3 bu4 ke3 shou2 cheng2 hong2 cha2	7000
+可以啊	ke3 yi3 a5	5000
+台鐵	tai2 tie3	9000
+吃到飽	chi1 dao4 bao3	9000
+周一症狀	zhou1 yi1 zheng4 zhuang4	5000
+咖	ka1	3000
+咖啡深藏	ka1 fei1 shen1 cang2	5000
+品質	pin3 zhi2	9000
+哪泥	na3 ni2	7000
+哪裡	na3 li3	9000
+哭啊	ku1 a5	8000
+啥小	sha2 xiao3	8000
+嘴炮	zui3 pao4	7000
+嘴砲	zui3 pao4	8000
+噓文	xu1 wen2	8000
+噓爆	xu1 wen2 bao4	5000
+嚇死	xia4 si3	6000
+嚇死我	xia4 si3 wo3	6500
+地政	di4 zheng4	7000
+壽司郎	shou4 si1 lang2	8000
+夏慕尼	xia4 mu3 ni2	7000
+外帶	wai4 dai4	9000
+外送	wai4 song4	10000
+夜市	ye4 shi4	11000
+夜市小吃	ye4 shi4 xiao3 chi1	7000
+大咖	da4 ka1	7000
+大潤發	da4 run4 fa1	7000
+大神	da4 shen2	7000
+大腸包小腸	da4 chang2 bao1 xiao3 chang2	8000
+大苑子	da4 yuan4 zi3	8000
+太強大了	tai4 qiang2 da4 le5	6000
+太扯	tai4 che3	7000
+太狂	tai4 kuang2	7000
+太陽餅	tai4 yang2 bing3	7000
+奇異果	qi2 yi4 guo3	7000
+好康	hao3 kang1	8000
+好累	hao3 lei4	6000
+好討厭	hao3 tao3 yan4	6000
+好雷	hao3 lei2	8000
+妙啊	miao4 a5	6000
+完蛋	wan2 dan4	7000
+宵夜	xiao1 ye4	10000
+家樂福	jia1 le4 fu2	8000
+實況主	shi2 kuang4 zhu3	8000
+小吃店	xiao3 chi1 dian4	7000
+小咖	xiao3 ka1	6000
+小編	xiao3 bian1	9000
+居酒屋	ju1 jiu3 wu1	7000
+屋馬	wu1 ma3	7000
+屋馬燒肉	wu1 ma3 shao1 rou4	8000
+崩潰	beng1 kui4	7000
+已讀	yi3 du2	6000
+已讀不回	yi3 du2 bu4 hui2	9000
+已讀亂回	yi3 du2 luan4 hui2	7000
+巷弄美食	xiang4 long4 mei3 shi2	6500
+帶風向	dai4 feng1 xiang4	9000
+帶風向仔	dai4 feng1 xiang4 zai3	6500
+幹上班	gan4 shang4 ban1	7000
+幹嘛	gan4 ma2	10000
+幹話	gan4 hua4	8000
+幹話王	gan4 hua4 wang2	6500
+底下留言	di3 xia4 liu2 yan2	6000
+度小月	du4 xiao3 yue4	7000
+廢到笑	fei4 dao4 xiao4	7000
+廢文	fei4 wen2	8000
+廣告文	guang3 gao4 wen2	6500
+引戰	yin3 zhan4	7000
+弘爺漢堡	hong2 ye2 han4 bao3	7000
+影片	ying3 pian4	10000
+得正	de2 zheng4	7000
+心得	xin1 de2	7000
+心得文	xin1 de2 wen2	7000
+必勝客	bi4 sheng4 ke4	8000
+悠遊卡	you1 you2 ka3	12000
+懶人	lan3 ren2	5000
+懶人包	lan3 ren2 bao1	10000
+我哭了	wo3 ku1 le5	6500
+我笑了	wo3 xiao4 le5	7000
+戰文	zhan4 wen2	6000
+戰起來	zhan4 qi3 lai2	6000
+戶政	hu4 zheng4	7000
+手搖飲	shou3 yao2 yin3	11000
+打假	da3 jia3	6000
+打假訊息	da3 jia3 xun4 xi2	6000
+打卡	da3 ka3	8000
+打卡景點	da3 ka3 jing3 dian3	7000
+打臉	da3 lian3	8000
+打臉成功	da3 lian3 cheng2 gong1	6500
+打臉文	da3 lian3 wen2	7000
+扯	che3	4000
+批踢踢	pi1 ti1 ti1	8000
+抓包	zhua1 bao1	7000
+折扣碼	zhe2 kou4 ma3	7000
+拉亞	la1 ya4	7000
+拉亞漢堡	la1 ya4 han4 bao3	8000
+要不要	yao4 bu4 yao4	12000
+要不要吃	yao4 bu4 yao4 chi1	9000
+早餐要不要	zao3 can1 yao4 bu4 yao4	8000
+吃拉亞	chi1 la1 ya4	10000
+早餐要不要吃拉亞	zao3 can1 yao4 bu4 yao4 chi1 la1 ya4	9000
+好像	hao3 xiang4	18000
+好想	hao3 xiang3	12000
+好香	hao3 xiang1	8000
+號臘食	hao4 la4 shi2	100
+有	you3	30000
+又	you4	12000
+友	you3	10000
+右	you4	10000
+
+
+拿坡里	na2 po1 li3	7000
+捷運	jie2 yun4	12000
+排隊名店	pai2 dui4 ming2 dian4	7000
+排骨飯	pai2 gu3 fan4	7000
+控肉飯	kong4 rou4 fan4	6500
+推文	tui1 wen2	9000
+推爆	tui1 bao4	8000
+摩斯	mo2 si1	8000
+摩斯漢堡	mo2 si1 han4 bao3	9000
+撿到槍	jian3 dao4 qiang1	8000
+擺爛	bai3 lan4	7000
+新手村	xin1 shou3 cun1	6000
+日出茶太	ri4 chu1 cha2 tai4	7000
+日式	ri4 ben3 shi4	5000
+日式料理	ri4 shi4 liao4 li3	7000
+早午餐	zao3 wu3 can1	8000
+早午餐店	zao3 wu3 can1 dian4	7000
+星巴克	xing1 ba1 ke4	9000
+春水堂	chun1 shui3 tang2	8000
+晨間廚房	chen2 jian1 chu2 fang2	8000
+有內鬼	you3 nei4 gui3	7000
+有夠	you3 gou4	9000
+有夠扯	you3 gou4 che3	9000
+有夠誇張	you3 gou4 kua1 zhang1	8000
+有掛	you3 gua4	7000
+服務費	fu2 wu4 fei4	7000
+板主	ban3 zhu3	7000
+板規	ban3 gui1	6500
+林東芳	lin2 dong1 fang1	7000
+林東芳牛肉麵	lin2 dong1 fang1 niu2 rou4 mian4	6500
+梗	geng3	6000
+業配	ye4 pei4	10000
+業配文	ye4 pei4 wen2	9000
+樓主	lou2 zhu3	7000
+標題黨	biao1 ti2 dang3	8000
+橘色涮涮屋	ju2 se4 shuan4 shuan4 wu1	6000
+機車	ji1 che1	11000
+欣葉	xin1 ye4	7000
+欣葉日本料理	xin1 ye4 ri4 ben3 liao4 li3	6000
+歇腳亭	xie1 jiao3 ting2	7000
+歐買尬	ou1 mai3 ga4	7000
+歐邁尬	ou1 mai3 ga4	6000
+母湯	mu3 tang1	10000
+水桶	shui3 tong3	7000
+永和豆漿	yong3 he2 dou4 jiang1	9000
+油管	you2 guan3	6000
+波霸	bo1 ba4	8000
+泰式	tai4 shi4	5000
+泰式料理	tai4 shi4 liao4 li3	7000
+洗板	xi3 ban3	8000
+洗版	xi3 ban3	8000
+洗白	xi3 bai2	7000
+洗頻	xi3 pin2	7000
+海底撈	hai3 di3 lao1	9000
+消夜	xiao1 ye4	7000
+涓豆腐	juan1 dou4 fu5	7000
+涮乃葉	shuan4 nai3 ye4	7000
+添好運	tian1 hao3 yun4	7000
+清心	qing1 xin1	7000
+清心福全	qing1 xin1 fu2 quan2	8000
+滑鼠	hua2 shu3	9000
+滷味	lu3 wei4	9000
+滷肉	lu3 rou4	6000
+滷肉飯	lu3 rou4 fan4	11000
+滿等	man3 deng3	5000
+漢堡王	han4 bao3 wang2	8000
+火鍋	huo3 guo1	6000
+火鍋店	huo3 guo1 dian4	7000
+炎上	yan2 shang4	6500
+炸雞	zha2 ji1	7000
+無言	wu2 yan2	7000
+無言以對	wu2 yan2 yi3 dui4	6500
+無語	wu2 yu3	6000
+無雷	wu2 lei2	7000
+焢肉飯	kong4 rou4 fan4	6500
+燒烤店	shao1 kao3 dian4	6500
+燒肉	shao1 rou4	6000
+爆卦	bao4 gua4	10000
+爆掛	bao4 gua4	7000
+爆料	bao4 liao4	7000
+爭鮮	zheng1 xian1	8000
+版主	ban3 zhu3	7000
+牛肉麵	niu2 rou4 mian4	9000
+狂	kuang2	3000
+王品	wang2 pin3	8000
+玩梗	wan2 geng3	7000
+珍煮丹	zhen1 zhu3 dan1	7000
+珍珠奶茶	zhen1 zhu1 nai3 cha2	12000
+瓦城	wa3 cheng2	8000
+瓦城泰國料理	wa3 cheng2 tai4 guo2 liao4 li3	7000
+甜不辣	tian2 bu2 la4	8000
+留言	liu2 yan2	7000
+留言區	liu2 yan2 qu1	6500
+發廢文	fa1 fei4 wen2	7000
+發文	fa1 wen2	8000
+發錢	fa1 qian2	6000
+發限動	fa1 xian4 dong4	7000
+百匯	bai3 hui4	6000
+百貨美食街	bai3 huo4 mei3 shi2 jie1	6000
+監理站	jian1 li3 zhan4	7000
+直播主	zhi2 bo1 zhu3	8000
+真假	zhen1 jia3	7000
+真的假的	zhen1 de5 jia3 de5	9000
+真香	zhen1 xiang1	9000
+石二鍋	shi2 er4 guo1	8000
+破病	po4 bing4	5000
+破防	po4 fang2	9000
+硬體	ying4 ti3	10000
+社恐	she4 kong3	7000
+社畜	she4 chu4	8000
+神人	shen2 ren2	7000
+神回	shen2 hui2	8000
+神回覆	shen2 hui2 fu4	7500
+神文	shen2 wen2	7000
+祭品文	ji4 pin3 wen2	8000
+禁言	jin4 yan2	6500
+穩了	wen3 le5	8000
+笑到哭	xiao4 dao4 ku1	7000
+笑到脫窗	xiao4 dao4 tuo1 chuang1	6000
+笑死	xiao4 si3	12000
+笑爛	xiao4 lan4	9000
+筆戰	bi3 zhan4	5500
+筒仔米糕	tong3 zai3 mi3 gao1	6000
+箭頭	jian4 tou2	6000
+築間	zhu2 jian1	7000
+築間幸福鍋物	zhu2 jian1 xing4 fu2 guo1 wu4	6000
+簡訊	jian3 xun4	10000
+簡餐	jian3 can1	6500
+簡餐店	jian3 can1 dian4	6000
+米粉湯	mi3 fen3 tang1	6500
+粉圓	fen3 yuan2	7000
+粉專	fen3 zhuan1	9000
+粉絲團	fen3 si1 tuan2	8000
+紅豆餅	hong2 dou4 bing3	7000
+終止交易	zhong1 zhi3 jiao1 yi4	6000
+絕了	jue2 le5	8000
+統一發票	tong3 yi1 fa1 piao4	9000
+網紅	wang3 hong2	9000
+網美	wang3 mei3	8000
+網路	wang3 lu4	12000
+網路用語	wang3 lu4 yong4 yu3	5000
+網軍	wang3 jun1	7000
+置入性行銷	zhi4 ru4 xing4 xing2 xiao1	7000
+置底	zhi4 di3	7000
+美式	mei3 shi4	5000
+美而美	mei3 er2 mei3	8000
+美食街	mei3 shi2 jie1	7000
+義大利麵	yi4 da4 li4 mian4	7000
+義式	yi4 shi4	5000
+翰林茶館	han4 lin2 cha2 guan3	7000
+老司機	lao3 si1 ji1	8000
+老虎堂	lao3 hu3 tang2	7000
+聚火鍋	ju4 huo3 guo1	7000
+肉圓	rou4 yuan2	7000
+肥宅	fei2 zhai2	9000
+肯德基	ken3 de2 ji1	9000
+脫窗	tuo1 chuang1	5000
+自助餐	zi4 zhu4 can1	7000
+臭豆腐	chou4 dou4 fu5	8000
+舒果	shu1 guo3	6500
+芋圓	yu4 yuan2	8000
+茶湯會	cha2 tang1 hui4	8000
+莆田	pu3 tian2	7000
+萊爾富	lai2 er3 fu4	8000
+藏壽司	cang2 shou4 si1	8000
+藝奇	yi4 qi2	6500
+蚵仔煎	e2 zi3 jian1	9000
+蛤	ha2	7000
+螢幕	ying2 mu4	9000
+衍嗎	yan3 ma5	6000
+街口	jie1 kou3	7000
+街口支付	jie1 kou3 zhi1 fu4	6500
+裡面	li3 mian4	10000
+裡頭	li3 tou2	8000
+西堤	xi1 ti2	8000
+西堤牛排	xi1 ti2 niu2 pai2	7000
+西雅圖咖啡	xi1 ya3 tu2 ka1 fei1	6000
+計程車	ji4 cheng2 che1	10000
+誇張	kua1 zhang1	6000
+護航	hu4 hang2	7000
+豆漿	dou4 jiang1	6000
+豆花	dou4 hua1	8000
+負雷	fu4 lei2	8000
+起底	qi3 di3	7000
+超商	chao1 shang1	12000
+超狂	chao1 kuang2	7500
+越式	yue4 shi4	5000
+路易莎	lu4 yi4 sha1	9000
+路易莎咖啡	lu4 yi4 sha1 ka1 fei1	8000
+踩雷	cai3 lei2	9000
+躺平	tang3 ping2	7000
+車輪餅	che1 lun2 bing3	7000
+軟體	ruan3 ti3	12000
+載具	zai4 ju4	8000
+迷因	mi2 yin1	8000
+迷客夏	mi2 ke4 xia4	9000
+這一鍋	zhe4 yi1 guo1	7000
+這裡	zhe4 li3	10000
+達美樂	da2 mei3 le4	8000
+避雷	bi4 lei2	8000
+那裡	na4 li3	9000
+都可	dou1 ke3	6000
+鄉民	xiang1 min2	11000
+鄉民正義	xiang1 min2 zheng4 yi4	7000
+鄉民用語	xiang1 min2 yong4 yu3	5000
+酪梨	lao4 li2	7000
+酸一下	suan1 yi2 xia4	6500
+酸民	suan1 min2	7000
+金子半之助	jin1 zi3 ban4 zhi1 zhu4	6000
+錢都	qian2 dou1	7000
+鍵盤俠	jian4 pan2 xia2	8000
+開幹	kai1 gan4	5000
+開箱	kai1 xiang1	9000
+開箱文	kai1 xiang1 wen2	8000
+開罵	kai1 ma4	6000
+關東煮	guan1 dong1 zhu3	8000
+阜杭豆漿	fu4 hang2 dou4 jiang1	8000
+防雷	fang2 lei2	8000
+限動	xian4 dong4	9000
+限時動態	xian4 shi2 dong4 tai4	8000
+陶板屋	tao2 ban3 wu1	8000
+雞排	ji1 pai2	10000
+雞腿飯	ji1 tui3 fan4	7000
+雷	lei2	4000
+雷文	lei2 wen2	7000
+非常泰	fei1 chang2 tai4	7000
+靠北	kao4 bei3	11000
+靠北同事	kao4 bei3 tong2 shi4	5500
+靠北客戶	kao4 bei3 ke4 hu4	5500
+靠北工程師	kao4 bei3 gong1 cheng2 shi1	5500
+靠北老闆	kao4 bei3 lao3 ban3	5500
+靠北鄉民	kao4 bei3 xiang1 min2	6000
+靠腰	kao4 yao1	9000
+韓式	han2 shi4	6000
+韓式料理	han2 shi4 liao4 li3	7000
+頂呱呱	ding3 gua1 gua1	8000
+風向	feng1 xiang4	6000
+風向球	feng1 xiang4 qiu2	6000
+颱風假	tai2 feng1 jia4	9000
+食堂	shi2 tang2	6000
+食記	shi2 ji4	9000
+食記文	shi2 ji4 wen2	7000
+飯館	fan4 guan3	5000
+餐廳	can1 ting1	7000
+餐酒館	can1 jiu3 guan3	7000
+餐館	can1 guan3	5000
+饗食天堂	xiang3 shi2 tian1 tang2	8000
+馬鈴薯	ma3 ling2 shu3	7000
+騎樓	qi2 lou2	7000
+高手	gao1 shou3	5000
+高捷	gao1 jie2	8000
+高鐵	gao1 tie3	10000
+鬍鬚張	hu2 xu1 zhang1	8000
+鬍鬚張魯肉飯	hu2 xu1 zhang1 lu3 rou4 fan4	7000
+魯	lu3	4000
+魯肉飯	lu3 rou4 fan4	8000
+魯蛇	lu3 she2	8000
+鮮茶道	xian1 cha2 dao4	7000
+鳳梨	feng4 li2	8000
+鳳梨酥	feng4 li2 su1	8000
+鶴茶樓	he4 cha2 lou2	6000
+鹹酥雞	xian2 su1 ji1	9000
+鹽酥雞	yan2 su1 ji1	11000
+鹽酥雞攤	yan2 su1 ji1 tan1	6000
+麥當勞	mai4 dang1 lao2	10000
+麵店	mian4 dian4	7000
+麻古	ma2 gu3	7000
+麻古茶坊	ma2 gu3 cha2 fang1	8000
+黑	hei1	3000
+黑一下	hei1 yi2 xia4	6000
+黑料	hei1 liao4	6500
+點點心	dian3 dian3 xin1	7000
+鼎泰豐	ding3 tai4 feng1	11000
