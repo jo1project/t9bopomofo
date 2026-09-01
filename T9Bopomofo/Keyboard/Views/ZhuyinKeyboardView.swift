@@ -128,18 +128,30 @@ final class ZhuyinKeyboardView: UIView {
         guard !items.isEmpty else { return }
         let host = window ?? self
         calloutHost = host
+        let axis = KeyCalloutView.Axis.preferred(forCount: items.count)
         let callout = KeyCalloutView()
-        callout.configure(items: items, selected: 0)
-        let itemW: CGFloat = 44
-        let contentW = CGFloat(items.count) * itemW + 8
-        let maxW = max(56, host.bounds.width - 12)
-        let w = min(contentW, maxW)
-        let h: CGFloat = 56
+        callout.configure(items: items, selected: 0, axis: axis)
+
         let btnFrame = button.convert(button.bounds, to: host)
-        var x = btnFrame.midX - w / 2
-        x = max(6, min(x, host.bounds.width - w - 6))
-        let y = max(6, btnFrame.minY - h - 8)
-        callout.frame = CGRect(x: x, y: y, width: w, height: h)
+        let maxW = max(56, host.bounds.width - 12)
+        let maxH = max(56, btnFrame.minY - 12)
+        let size = callout.preferredSize(maxWidth: maxW, maxHeight: maxH)
+
+        var x: CGFloat
+        var y: CGFloat
+        switch axis {
+        case .horizontal:
+            x = btnFrame.midX - size.width / 2
+            y = btnFrame.minY - size.height - 8
+        case .vertical:
+            // Anchor to the key; grow upward so the first item (，) stays nearest the finger.
+            x = btnFrame.midX - size.width / 2
+            y = btnFrame.minY - size.height - 8
+        }
+        x = max(6, min(x, host.bounds.width - size.width - 6))
+        y = max(6, min(y, btnFrame.minY - size.height - 4))
+
+        callout.frame = CGRect(x: x, y: y, width: size.width, height: size.height)
         host.addSubview(callout)
         activeCallout = callout
     }
@@ -147,7 +159,8 @@ final class ZhuyinKeyboardView: UIView {
     private func updateCalloutSelection(windowPoint: CGPoint) {
         guard let callout = activeCallout, let host = calloutHost else { return }
         let local = callout.convert(windowPoint, from: host.window ?? host)
-        callout.select(atLocationInCallout: local.x)
+        // Ignore while finger is still on the key below — keeps default selection (first item).
+        _ = callout.select(atLocationInCallout: local)
     }
 
     private func commitCallout() {
@@ -273,7 +286,8 @@ final class KeyButton: UIButton {
             guard !onLongPressCallout.isEmpty else { return }
             calloutActive = true
             onCalloutBegin?(onLongPressCallout)
-            onCalloutMove?(windowPoint)
+            // Do not map finger position on begin — finger is still on the key,
+            // which would jump selection away from the default first item.
         case .changed:
             guard calloutActive else { return }
             onCalloutMove?(windowPoint)
