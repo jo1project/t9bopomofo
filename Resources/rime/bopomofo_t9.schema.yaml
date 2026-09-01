@@ -118,15 +118,10 @@ speller:
     - derive/[qwxy]$//
     - derive/^(.).+$/$1/
 
-# 語法模型（可選，建議啟用）：用 n-gram 語言模型大幅改善長句的自動斷詞。
-# 啟用方式：
-#   1. 下載繁體八股文詞語模型 zh-hant-t-essay-bgw.gram（約 10.5 MB）
-#      https://github.com/lotem/rime-octagram-data （hant 分支）
-#   2. 將 .gram 檔放入 Hamster 的 RIME 使用者目錄（與本檔同層）
-#   3. 取消下面 grammar 區塊與 translator/contextual_suggestions 的註解，重新部署
-# grammar/octagram requires librime-octagram plugin (not in LibrimeKit v0.1.0).
-# grammar:
-#   language: zh-hant-t-essay-bgw
+# 語法模型（librime-octagram，已鏈入 LibrimeKit 2.9.0）
+# 模型檔 zh-hant-t-essay-bgw.gram 由 Scripts/download-models.sh 下載
+grammar:
+  language: zh-hant-t-essay-bgw
 
 translator:
   dictionary: bopomofo_t9

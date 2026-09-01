@@ -1,30 +1,38 @@
 import Foundation
 import Darwin
 
-/// Thin Swift wrapper around librime C API (Hamster / LibrimeKit style).
+/// Thin Swift wrapper around librime C API via `rime_get_api()`
+/// (free `Rime*` helpers are C++-mangled in LibrimeKit 2.x).
 final class RimeEngine {
     static let shared = RimeEngine()
 
     private(set) var isReady = false
     private var session: RimeSessionId = 0
-    private let resourceVersion = "rime-bundle-v2"
+    private let resourceVersion = "rime-bundle-v3-octagram"
     private let schemaId = "bopomofo_phone"
 
-    // Keep path / identity strings alive for C API pointers.
     private var sharedDir: NSString = ""
     private var userDir: NSString = ""
     private let distributionName: NSString = "T9Bopomofo"
     private let distributionCodeName: NSString = "t9bopomofo"
-    private let distributionVersion: NSString = "0.2.0"
+    private let distributionVersion: NSString = "0.3.0"
     private let appName: NSString = "rime.t9bopomofo"
 
     private init() {}
+
+    private var api: UnsafeMutablePointer<RimeApi>? {
+        rime_get_api()
+    }
 
     // MARK: - Lifecycle
 
     @discardableResult
     func start(bundle: Bundle) -> Bool {
-        if isReady, session != 0, RimeFindSession(session) != 0 {
+        guard let api else {
+            NSLog("[RimeEngine] rime_get_api() returned nil")
+            return false
+        }
+        if isReady, session != 0, api.pointee.find_session(session) != 0 {
             return true
         }
 
@@ -47,32 +55,32 @@ final class RimeEngine {
         traits.app_name = appName.utf8String
         traits.min_log_level = 2
 
-        RimeSetup(&traits)
-        RimeInitialize(&traits)
+        api.pointee.setup(&traits)
+        api.pointee.initialize(&traits)
 
-        // First launch compiles dicts; join so candidates are available immediately.
-        if RimeStartMaintenance(1) != 0 {
-            RimeJoinMaintenanceThread()
+        if api.pointee.start_maintenance(1) != 0 {
+            api.pointee.join_maintenance_thread()
         }
 
-        session = RimeCreateSession()
+        session = api.pointee.create_session()
         if session == 0 {
             NSLog("[RimeEngine] create_session failed")
             return false
         }
-        _ = RimeSelectSchema(session, schemaId)
+        _ = schemaId.withCString { api.pointee.select_schema(session, $0) }
         isReady = true
-        NSLog("[RimeEngine] ready schema=%@", schemaId)
+        NSLog("[RimeEngine] ready schema=%@ version=%@", schemaId, String(cString: api.pointee.get_version()))
         return true
     }
 
     func shutdown() {
+        guard let api else { return }
         if session != 0 {
-            _ = RimeDestroySession(session)
+            _ = api.pointee.destroy_session(session)
             session = 0
         }
         if isReady {
-            RimeFinalize()
+            api.pointee.finalize()
             isReady = false
         }
     }
@@ -81,84 +89,81 @@ final class RimeEngine {
 
     @discardableResult
     func processKey(_ ch: Character) -> Bool {
-        guard isReady, let scalar = ch.unicodeScalars.first else { return false }
-        return RimeProcessKey(session, Int32(scalar.value), 0) != 0
+        guard isReady, let api, let scalar = ch.unicodeScalars.first else { return false }
+        return api.pointee.process_key(session, Int32(scalar.value), 0) != 0
     }
 
     @discardableResult
     func processKeyCode(_ code: Int32, mask: Int32 = 0) -> Bool {
-        guard isReady else { return false }
-        return RimeProcessKey(session, code, mask) != 0
+        guard isReady, let api else { return false }
+        return api.pointee.process_key(session, code, mask) != 0
     }
 
     func backspace() {
-        _ = processKeyCode(0xff08) // XK_BackSpace
+        _ = processKeyCode(0xff08)
     }
 
     func clearComposition() {
-        guard isReady else { return }
-        RimeClearComposition(session)
+        guard isReady, let api else { return }
+        api.pointee.clear_composition(session)
     }
 
     @discardableResult
     func selectCandidate(at index: Int) -> String {
-        guard isReady else { return "" }
-        if let api = rime_get_api() {
-            _ = api.pointee.select_candidate(session, index)
-        }
+        guard isReady, let api else { return "" }
+        _ = api.pointee.select_candidate(session, index)
         return consumeCommit()
     }
 
     func consumeCommit() -> String {
-        guard isReady else { return "" }
+        guard isReady, let api else { return "" }
         var commit = RimeCommit()
         memset(&commit, 0, MemoryLayout<RimeCommit>.size)
         commit.data_size = Int32(MemoryLayout<RimeCommit>.size - MemoryLayout<Int32>.size)
-        guard RimeGetCommit(session, &commit) != 0 else { return "" }
+        guard api.pointee.get_commit(session, &commit) != 0 else { return "" }
         let text = commit.text.map { String(cString: $0) } ?? ""
-        RimeFreeCommit(&commit)
+        _ = api.pointee.free_commit(&commit)
         return text
     }
 
     // MARK: - Context
 
     var input: String {
-        guard isReady, let api = rime_get_api() else { return "" }
-        guard let c = api.pointee.get_input(session) else { return "" }
+        guard isReady, let api, let c = api.pointee.get_input(session) else { return "" }
         return String(cString: c)
     }
 
     var isComposing: Bool {
-        guard isReady else { return false }
+        guard isReady, let api else { return false }
         var status = RimeStatus()
         memset(&status, 0, MemoryLayout<RimeStatus>.size)
         status.data_size = Int32(MemoryLayout<RimeStatus>.size - MemoryLayout<Int32>.size)
-        defer { RimeFreeStatus(&status) }
-        guard RimeGetStatus(session, &status) != 0 else { return false }
+        defer { _ = api.pointee.free_status(&status) }
+        guard api.pointee.get_status(session, &status) != 0 else { return false }
         return status.is_composing != 0
     }
 
     var preedit: String {
-        guard isReady else { return "" }
+        guard isReady, let api else { return "" }
         var ctx = RimeContext()
         memset(&ctx, 0, MemoryLayout<RimeContext>.size)
         ctx.data_size = Int32(MemoryLayout<RimeContext>.size - MemoryLayout<Int32>.size)
-        defer { RimeFreeContext(&ctx) }
-        guard RimeGetContext(session, &ctx) != 0 else { return "" }
+        defer { _ = api.pointee.free_context(&ctx) }
+        guard api.pointee.get_context(session, &ctx) != 0 else { return "" }
         guard let p = ctx.composition.preedit else { return "" }
         return String(cString: p)
     }
 
     func candidates(limit: Int = 12) -> [(text: String, comment: String)] {
-        guard isReady else { return [] }
+        guard isReady, let api else { return [] }
         var iterator = RimeCandidateListIterator()
         memset(&iterator, 0, MemoryLayout<RimeCandidateListIterator>.size)
-        guard RimeCandidateListBegin(session, &iterator) != 0 else { return [] }
-        defer { RimeCandidateListEnd(&iterator) }
+        guard api.pointee.candidate_list_begin(session, &iterator) != 0 else { return [] }
+        defer { api.pointee.candidate_list_end(&iterator) }
 
         var out: [(String, String)] = []
         out.reserveCapacity(limit)
-        while out.count < limit, RimeCandidateListNext(&iterator) != 0 {
+        while out.count < limit, api.pointee.candidate_list_next(&iterator) != 0 {
             let text = iterator.candidate.text.map { String(cString: $0) } ?? ""
             let comment = iterator.candidate.comment.map { String(cString: $0) } ?? ""
             if !text.isEmpty {
@@ -204,6 +209,7 @@ final class RimeEngine {
 
             let sharedNames = [
                 "essay.txt",
+                "zh-hant-t-essay-bgw.gram",
                 "default.yaml",
                 "key_bindings.yaml",
                 "punctuation.yaml",

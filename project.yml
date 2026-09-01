@@ -44,9 +44,6 @@ targets:
       - path: Resources/rime
         buildPhase: resources
         type: folder
-        excludes:
-          - "**/*.gram"
-          - "**/default.prelude.yaml"
       - path: Resources/layouts
         buildPhase: resources
         type: folder
@@ -71,9 +68,19 @@ targets:
         embed: false
       - framework: Frameworks/boost_filesystem.xcframework
         embed: false
+      - framework: Frameworks/boost_locale.xcframework
+        embed: false
       - framework: Frameworks/boost_regex.xcframework
         embed: false
       - framework: Frameworks/boost_system.xcframework
+        embed: false
+      - framework: Frameworks/icudata.xcframework
+        embed: false
+      - framework: Frameworks/icui18n.xcframework
+        embed: false
+      - framework: Frameworks/icuio.xcframework
+        embed: false
+      - framework: Frameworks/icuuc.xcframework
         embed: false
       - framework: Frameworks/libglog.xcframework
         embed: false

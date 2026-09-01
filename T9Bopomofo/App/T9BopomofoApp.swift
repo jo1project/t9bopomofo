@@ -26,7 +26,7 @@ struct SetupView: View {
 
                     Group {
                         Text("已知行為").font(.headline)
-                        Text("• 選詞引擎：librime（bopomofo_phone + t9_sort_filter）")
+                        Text("• 選詞引擎：librime + octagram（八股文語法模型）")
                         Text("• 有候選時按符號／空格／換行：只插入該字元並清空組字，不會送出第一候選")
                         Text("• 支援 T9 一鍵多碼、聲調可省略；長按可鎖定單碼")
                         Text("• 本機學習（App Group）；內建台灣詞")
