@@ -45,7 +45,7 @@ final class KeyCalloutView: UIView {
             let lab = UILabel()
             lab.text = item.label
             lab.textAlignment = .center
-            lab.font = .systemFont(ofSize: item.label.count <= 2 ? 30 : 20, weight: .semibold)
+            lab.font = .systemFont(ofSize: item.label.count <= 2 ? 26 : 20, weight: .semibold)
             lab.layer.cornerRadius = 8
             lab.clipsToBounds = true
             lab.translatesAutoresizingMaskIntoConstraints = false

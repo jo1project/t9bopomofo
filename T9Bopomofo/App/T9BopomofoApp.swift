@@ -41,10 +41,11 @@ struct SetupView: View {
                     Group {
                         Text("已知行為").font(.headline)
                         Text("• 選詞：librime + octagram；候選 ▼ 可展開")
-                        Text("• 聲符鍵 34pt（鍵盤本體，不自動縮小）")
+                        Text("• 注音鍵（聲母／韻母）加大；聲調鍵與一般鍵同為 26pt")
                         Text("• 。點＝句號／長按標點；123 長按表情；空格/EN")
+                        Text("• 英文鍵盤：⇧ 點一下大寫下一個、再點 ⇪ 鎖定")
                         Text("• 備份：本機 JSON 匯出／匯入，可選 iCloud KVS")
-                        Text("• LLM：在「LLM」分頁填入相容 API，上屏後聯想")
+                        Text("• LLM：OpenAI 需付費額度；也可用 Groq 等免費相容 API")
                     }
                 }
                 .padding()
@@ -177,12 +178,25 @@ struct LLMSettingsView: View {
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
+                Section("費用說明") {
+                    Text("OpenAI（預設）需要付費／帳戶有額度，免費試用額用完就會失敗。")
+                    Text("也可用其他 OpenAI 相容服務（有免費額度者例如 Groq），改 Base URL 與 Model 即可。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    Button("填入 Groq 範例") {
+                        baseURL = "https://api.groq.com/openai/v1"
+                        model = "llama-3.1-8b-instant"
+                        AppSettings.shared.llmBaseURL = baseURL
+                        AppSettings.shared.llmModel = model
+                        testStatus = "已填 Groq URL／Model，請到 console.groq.com 申請免費 API Key"
+                    }
+                }
                 Section("OpenAI 相容 API") {
                     TextField("Base URL", text: $baseURL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .onChange(of: baseURL) { _, v in AppSettings.shared.llmBaseURL = v }
-                    SecureField("API Key", text: $apiKey)
+                    SecureField("API Key（必填）", text: $apiKey)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .onChange(of: apiKey) { _, v in AppSettings.shared.llmAPIKey = v }
@@ -197,7 +211,11 @@ struct LLMSettingsView: View {
                         Task {
                             let words = await LLMPredictor.shared.suggest(after: "你好", limit: 5)
                             await MainActor.run {
-                                testStatus = words.isEmpty ? "無結果（檢查 Key／網路／完整取用）" : words.joined(separator: "、")
+                                if words.isEmpty {
+                                    testStatus = "失敗：檢查 Key／額度／網路／完整取用。OpenAI 需付費額度；可改試 Groq 免費 Key。"
+                                } else {
+                                    testStatus = words.joined(separator: "、")
+                                }
                             }
                         }
                     }
