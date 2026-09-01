@@ -69,7 +69,8 @@ final class RimeEngine {
         }
         _ = schemaId.withCString { api.pointee.select_schema(session, $0) }
         isReady = true
-        NSLog("[RimeEngine] ready schema=%@ version=%@", schemaId, String(cString: api.pointee.get_version()))
+        let ver = api.pointee.get_version().map { String(cString: $0) } ?? "?"
+        NSLog("[RimeEngine] ready schema=%@ version=%@", schemaId, ver)
         return true
     }
 
