@@ -128,29 +128,16 @@ final class ZhuyinKeyboardView: UIView {
         guard !items.isEmpty else { return }
         let host = window ?? self
         calloutHost = host
-        let axis = KeyCalloutView.Axis.preferred(forCount: items.count)
         let callout = KeyCalloutView()
-        callout.configure(items: items, selected: 0, axis: axis)
+        callout.configure(items: items, selected: 0)
 
         let btnFrame = button.convert(button.bounds, to: host)
-        let maxW = max(56, host.bounds.width - 12)
-        let maxH = max(56, btnFrame.minY - 12)
-        let size = callout.preferredSize(maxWidth: maxW, maxHeight: maxH)
-
-        var x: CGFloat
-        var y: CGFloat
-        switch axis {
-        case .horizontal:
-            x = btnFrame.midX - size.width / 2
-            y = btnFrame.minY - size.height - 8
-        case .vertical:
-            // Anchor to the key; grow upward so the first item (，) stays nearest the finger.
-            x = btnFrame.midX - size.width / 2
-            y = btnFrame.minY - size.height - 8
-        }
+        let maxW = max(48, host.bounds.width - 12)
+        let size = callout.preferredSize(maxWidth: maxW)
+        // Prefer expanding left from right-edge keys (period) so 「，」 stays near the finger.
+        var x = btnFrame.maxX - size.width
         x = max(6, min(x, host.bounds.width - size.width - 6))
-        y = max(6, min(y, btnFrame.minY - size.height - 4))
-
+        let y = max(6, btnFrame.minY - size.height - 8)
         callout.frame = CGRect(x: x, y: y, width: size.width, height: size.height)
         host.addSubview(callout)
         activeCallout = callout
@@ -159,7 +146,7 @@ final class ZhuyinKeyboardView: UIView {
     private func updateCalloutSelection(windowPoint: CGPoint) {
         guard let callout = activeCallout, let host = calloutHost else { return }
         let local = callout.convert(windowPoint, from: host.window ?? host)
-        // Ignore while finger is still on the key below — keeps default selection (first item).
+        // Ignore while finger is still on the key below — keeps default selection (，).
         _ = callout.select(atLocationInCallout: local)
     }
 

@@ -15,7 +15,7 @@ final class RimeEngine {
     private var userDir: NSString = ""
     private let distributionName: NSString = "T9Bopomofo"
     private let distributionCodeName: NSString = "t9bopomofo"
-    private let distributionVersion: NSString = "0.3.11"
+    private let distributionVersion: NSString = "0.3.12"
     private let appName: NSString = "rime.t9bopomofo"
 
     private init() {}
