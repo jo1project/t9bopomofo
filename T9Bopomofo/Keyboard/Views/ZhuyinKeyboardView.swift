@@ -4,11 +4,12 @@ final class ZhuyinKeyboardView: UIView {
     var onAction: ((ZhuyinPhoneLayout.KeyAction) -> Void)?
     var onMode: (() -> Void)?
 
-    private let interKey: CGFloat = 6
-    private let interRow: CGFloat = 7
-    private let sideGapBeforeFunc: CGFloat = 10
+    private let interKey: CGFloat = 5
+    private let interRow: CGFloat = 4
+    private let sideGapBeforeFunc: CGFloat = 8
     private let sideFrac: CGFloat = 0.155
     private let midFrac: CGFloat = 0.230
+    private let edgeInset: CGFloat = 2
 
     private var keyButtons: [KeyButton] = []
     private let separator = UIView()
@@ -78,11 +79,12 @@ final class ZhuyinKeyboardView: UIView {
     }
 
     private func layoutKeys() {
+        let inset = edgeInset
         let bounds = CGRect(
-            x: 4,
-            y: 4,
-            width: self.bounds.width - 8,
-            height: self.bounds.height - 8
+            x: inset,
+            y: inset,
+            width: self.bounds.width - inset * 2,
+            height: self.bounds.height - inset * 2
         )
         guard bounds.width > 1, bounds.height > 1 else { return }
 
@@ -103,7 +105,7 @@ final class ZhuyinKeyboardView: UIView {
 
         var sepX = bounds.minX + widths[0] + gaps[0] + widths[1] + gaps[1] + widths[2] + gaps[2] + widths[3]
         sepX += sideGapBeforeFunc * 0.45
-        separator.frame = CGRect(x: sepX - 1, y: bounds.minY + 4, width: 2, height: bounds.height - 8)
+        separator.frame = CGRect(x: sepX - 1, y: bounds.minY + 2, width: 2, height: bounds.height - 4)
         bringSubviewToFront(separator)
 
         var idx = 0

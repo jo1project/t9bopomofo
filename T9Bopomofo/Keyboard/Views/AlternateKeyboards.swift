@@ -25,7 +25,7 @@ final class EnglishKeyboardView: UIView {
     override init(frame: CGRect) {
         super.init(frame: frame)
         root.axis = .vertical
-        root.spacing = 6
+        root.spacing = 4
         root.distribution = .fillEqually
         root.translatesAutoresizingMaskIntoConstraints = false
         addSubview(root)
@@ -216,7 +216,7 @@ final class SymbolKeyboardView: UIView {
         super.init(frame: frame)
         let root = UIStackView()
         root.axis = .vertical
-        root.spacing = 6
+        root.spacing = 4
         root.distribution = .fillEqually
         root.translatesAutoresizingMaskIntoConstraints = false
         addSubview(root)

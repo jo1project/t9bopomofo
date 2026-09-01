@@ -18,8 +18,8 @@ final class KeyboardViewController: UIInputViewController {
     private weak var candidatePanel: CandidatePanelView?
     private var candidatesExpanded = false
 
-    private let collapsedHeight: CGFloat = 320
-    private let expandedHeight: CGFloat = 420
+    private let collapsedHeight: CGFloat = 268
+    private let expandedHeight: CGFloat = 360
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -31,19 +31,19 @@ final class KeyboardViewController: UIInputViewController {
         view.addSubview(candidateBar)
         view.addSubview(keyboardContainer)
 
-        let barH = candidateBar.heightAnchor.constraint(equalToConstant: 44)
+        let barH = candidateBar.heightAnchor.constraint(equalToConstant: 40)
         candidateBarHeight = barH
 
         NSLayoutConstraint.activate([
-            candidateBar.topAnchor.constraint(equalTo: view.topAnchor, constant: 4),
+            candidateBar.topAnchor.constraint(equalTo: view.topAnchor, constant: 2),
             candidateBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 4),
             candidateBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -4),
             barH,
 
-            keyboardContainer.topAnchor.constraint(equalTo: candidateBar.bottomAnchor, constant: 4),
+            keyboardContainer.topAnchor.constraint(equalTo: candidateBar.bottomAnchor, constant: 2),
             keyboardContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 3),
             keyboardContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -3),
-            keyboardContainer.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -3),
+            keyboardContainer.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -2),
         ])
 
         let hc = view.heightAnchor.constraint(equalToConstant: collapsedHeight)
