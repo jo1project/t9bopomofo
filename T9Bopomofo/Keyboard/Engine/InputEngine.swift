@@ -15,9 +15,19 @@ final class InputEngine: ObservableObject {
     private let userLexicon: UserLexicon
     private let rime = RimeEngine.shared
     private var loaded = false
+    private var candidateLimit = 12
 
     init(userLexicon: UserLexicon = UserLexicon()) {
         self.userLexicon = userLexicon
+    }
+
+    func setCandidateLimit(_ limit: Int) {
+        candidateLimit = max(8, limit)
+        if usingRime {
+            syncFromRime()
+        } else {
+            refreshSwiftCandidates()
+        }
     }
 
     func prepare(bundle: Bundle = .main) {
@@ -181,7 +191,7 @@ final class InputEngine: ObservableObject {
             preeditDisplay = input.map { T9KeyMap.keyLabels[$0] ?? String($0) }.joined(separator: "·")
         }
 
-        let raw = rime.candidates(limit: 12)
+        let raw = rime.candidates(limit: candidateLimit)
         if raw.isEmpty, !lastCommitted.isEmpty, input.isEmpty {
             let preds = userLexicon.predictions(after: lastCommitted)
             candidates = preds.enumerated().map { idx, w in
@@ -312,7 +322,7 @@ final class InputEngine: ObservableObject {
 
         items.sort { $0.candidate.score > $1.candidate.score }
         let sorted = T9SortFilter.sort(items: items, inputDigitsAndTones: inputStream)
-        candidates = Array(sorted.prefix(12))
+        candidates = Array(sorted.prefix(candidateLimit))
     }
 
     private func toneScore(tones entryTones: String) -> Double {

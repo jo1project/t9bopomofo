@@ -14,7 +14,12 @@ final class KeyboardViewController: UIInputViewController {
     private let candidateBar = CandidateBarView()
     private let keyboardContainer = UIView()
     private var heightConstraint: NSLayoutConstraint?
-    private weak var punctuationTray: PunctuationTrayView?
+    private var candidateBarHeight: NSLayoutConstraint?
+    private weak var candidatePanel: CandidatePanelView?
+    private var candidatesExpanded = false
+
+    private let collapsedHeight: CGFloat = 320
+    private let expandedHeight: CGFloat = 420
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -26,11 +31,14 @@ final class KeyboardViewController: UIInputViewController {
         view.addSubview(candidateBar)
         view.addSubview(keyboardContainer)
 
+        let barH = candidateBar.heightAnchor.constraint(equalToConstant: 44)
+        candidateBarHeight = barH
+
         NSLayoutConstraint.activate([
             candidateBar.topAnchor.constraint(equalTo: view.topAnchor, constant: 4),
             candidateBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 4),
             candidateBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -4),
-            candidateBar.heightAnchor.constraint(equalToConstant: 36),
+            barH,
 
             keyboardContainer.topAnchor.constraint(equalTo: candidateBar.bottomAnchor, constant: 4),
             keyboardContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 3),
@@ -38,19 +46,20 @@ final class KeyboardViewController: UIInputViewController {
             keyboardContainer.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -3),
         ])
 
-        let hc = view.heightAnchor.constraint(equalToConstant: 308)
+        let hc = view.heightAnchor.constraint(equalToConstant: collapsedHeight)
         hc.priority = .required
         hc.isActive = true
         heightConstraint = hc
-
-        // Candidate bar slightly tighter so 4 key rows get Hamster-like height
-        // (constraints already set above)
 
         candidateBar.onSelect = { [weak self] candidate in
             guard let self else { return }
             let text = self.engine.selectCandidate(candidate)
             self.textDocumentProxy.insertText(text)
+            self.collapseCandidates()
             self.reloadCandidates()
+        }
+        candidateBar.onToggleExpand = { [weak self] in
+            self?.toggleCandidatesExpanded()
         }
 
         NotificationCenter.default.addObserver(
@@ -59,6 +68,7 @@ final class KeyboardViewController: UIInputViewController {
             queue: .main
         ) { [weak self] _ in
             self?.mode = .emoji
+            self?.collapseCandidates()
             self?.renderKeyboard()
         }
 
@@ -73,6 +83,55 @@ final class KeyboardViewController: UIInputViewController {
 
     private func reloadCandidates() {
         candidateBar.setCandidates(engine.candidates, preedit: engine.preeditDisplay)
+        candidatePanel?.setCandidates(engine.candidates)
+    }
+
+    private func toggleCandidatesExpanded() {
+        if candidatesExpanded {
+            collapseCandidates()
+        } else {
+            expandCandidates()
+        }
+    }
+
+    private func expandCandidates() {
+        candidatesExpanded = true
+        candidateBar.setExpanded(true)
+        engine.setCandidateLimit(64)
+        reloadCandidates()
+
+        candidatePanel?.removeFromSuperview()
+        let panel = CandidatePanelView()
+        panel.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(panel)
+        NSLayoutConstraint.activate([
+            panel.topAnchor.constraint(equalTo: candidateBar.bottomAnchor, constant: 2),
+            panel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 4),
+            panel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -4),
+            panel.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -4),
+        ])
+        panel.onSelect = { [weak self] candidate in
+            guard let self else { return }
+            let text = self.engine.selectCandidate(candidate)
+            self.textDocumentProxy.insertText(text)
+            self.collapseCandidates()
+            self.reloadCandidates()
+        }
+        panel.setCandidates(engine.candidates)
+        candidatePanel = panel
+        keyboardContainer.isHidden = true
+        heightConstraint?.constant = expandedHeight
+    }
+
+    private func collapseCandidates() {
+        candidatesExpanded = false
+        candidateBar.setExpanded(false)
+        engine.setCandidateLimit(12)
+        candidatePanel?.removeFromSuperview()
+        candidatePanel = nil
+        keyboardContainer.isHidden = false
+        heightConstraint?.constant = collapsedHeight
+        reloadCandidates()
     }
 
     private func renderKeyboard() {
@@ -93,6 +152,7 @@ final class KeyboardViewController: UIInputViewController {
             }
             grid.onMode = { [weak self] in
                 self?.mode = .english
+                self?.collapseCandidates()
                 self?.renderKeyboard()
             }
         case .english:
@@ -102,7 +162,6 @@ final class KeyboardViewController: UIInputViewController {
             pin(en)
             en.onInsert = { [weak self] s in
                 guard let self else { return }
-                // Passthrough clears composing per product rule when switching contexts
                 _ = self.engine.insertPassthroughAndClear("")
                 self.textDocumentProxy.insertText(s)
                 self.reloadCandidates()
@@ -158,81 +217,48 @@ final class KeyboardViewController: UIInputViewController {
     private func handleZhuyin(_ action: ZhuyinPhoneLayout.KeyAction) {
         switch action {
         case .t9(let ch):
-            hidePunctuationTray()
             engine.tapT9Key(ch)
         case .tone(let ch):
-            hidePunctuationTray()
             engine.tapTone(ch)
+        case .toneNeutral:
+            // Soft tone: omit tone marker (Rime treats missing tone as 輕聲).
+            break
         case .exact(let token, _):
-            hidePunctuationTray()
             engine.tapExactToken(token)
         case .backspace:
-            if punctuationTray != nil {
-                hidePunctuationTray()
-                return
-            }
             if !engine.isComposing {
                 textDocumentProxy.deleteBackward()
             } else {
                 engine.backspace()
             }
         case .numberPad:
-            hidePunctuationTray()
             mode = .symbols
+            collapseCandidates()
             renderKeyboard()
             return
-        case .punctuationMenu:
-            if punctuationTray != nil {
-                hidePunctuationTray()
-            } else {
-                showPunctuationTray()
-            }
-            return
         case .symbol(let s):
-            hidePunctuationTray()
             let out = engine.handleSymbol(s)
             textDocumentProxy.insertText(out)
         case .space:
-            hidePunctuationTray()
             let out = engine.handleSpace()
             textDocumentProxy.insertText(out)
         case .enter:
-            hidePunctuationTray()
             let out = engine.handleReturn()
             textDocumentProxy.insertText(out)
+        case .switchEnglish:
+            mode = .english
+            collapseCandidates()
+            renderKeyboard()
+            return
+        case .switchEmoji:
+            mode = .emoji
+            collapseCandidates()
+            renderKeyboard()
+            return
+        }
+        if candidatesExpanded {
+            engine.setCandidateLimit(64)
         }
         reloadCandidates()
-    }
-
-    private func showPunctuationTray() {
-        hidePunctuationTray()
-        let tray = PunctuationTrayView()
-        tray.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(tray)
-        NSLayoutConstraint.activate([
-            tray.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 6),
-            tray.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -6),
-            tray.bottomAnchor.constraint(equalTo: keyboardContainer.topAnchor, constant: -2),
-            tray.heightAnchor.constraint(equalToConstant: 52),
-        ])
-        tray.onPick = { [weak self] symbol in
-            guard let self else { return }
-            let out = self.engine.handleSymbol(symbol)
-            self.textDocumentProxy.insertText(out)
-            self.hidePunctuationTray()
-            self.reloadCandidates()
-        }
-        tray.onDismiss = { [weak self] in
-            self?.hidePunctuationTray()
-        }
-        punctuationTray = tray
-        // Grow keyboard a bit so tray doesn't crush candidates
-        heightConstraint?.constant = 360
-    }
-
-    private func hidePunctuationTray() {
-        punctuationTray?.removeFromSuperview()
-        punctuationTray = nil
-        heightConstraint?.constant = 308
     }
 }
