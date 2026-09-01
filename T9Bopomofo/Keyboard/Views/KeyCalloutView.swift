@@ -1,7 +1,9 @@
 import UIKit
 
 /// Horizontal long-press callout bubble with slide-to-select (Hamster-style).
+/// Scrolls when there are more punctuation items than fit on screen.
 final class KeyCalloutView: UIView {
+    private let scrollView = UIScrollView()
     private let stack = UIStackView()
     private var labels: [UILabel] = []
     private(set) var items: [(label: String, action: ZhuyinPhoneLayout.KeyAction)] = []
@@ -17,18 +19,32 @@ final class KeyCalloutView: UIView {
         layer.shadowRadius = 6
         layer.borderColor = UIColor(white: 0.75, alpha: 1).cgColor
         layer.borderWidth = 0.5
+        clipsToBounds = false
+
+        scrollView.showsHorizontalScrollIndicator = false
+        scrollView.showsVerticalScrollIndicator = false
+        scrollView.alwaysBounceHorizontal = true
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(scrollView)
 
         stack.axis = .horizontal
         stack.alignment = .center
-        stack.distribution = .fillEqually
+        stack.distribution = .fill
         stack.spacing = 0
         stack.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(stack)
+        scrollView.addSubview(stack)
+
         NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: topAnchor, constant: 4),
-            stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4),
-            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
-            stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
+            scrollView.topAnchor.constraint(equalTo: topAnchor, constant: 4),
+            scrollView.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4),
+            scrollView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
+            scrollView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
+
+            stack.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
+            stack.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
+            stack.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
+            stack.heightAnchor.constraint(equalTo: scrollView.frameLayoutGuide.heightAnchor),
         ])
     }
 
@@ -41,7 +57,7 @@ final class KeyCalloutView: UIView {
             $0.removeFromSuperview()
         }
         labels = []
-        for (i, item) in items.enumerated() {
+        for item in items {
             let lab = UILabel()
             lab.text = item.label
             lab.textAlignment = .center
@@ -49,13 +65,15 @@ final class KeyCalloutView: UIView {
             lab.layer.cornerRadius = 8
             lab.clipsToBounds = true
             lab.translatesAutoresizingMaskIntoConstraints = false
-            lab.widthAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
+            lab.widthAnchor.constraint(equalToConstant: 44).isActive = true
             lab.heightAnchor.constraint(equalToConstant: 44).isActive = true
             stack.addArrangedSubview(lab)
             labels.append(lab)
-            _ = i
         }
         select(index: min(max(0, selected), max(0, items.count - 1)))
+        setNeedsLayout()
+        layoutIfNeeded()
+        scrollSelectedIntoView(animated: false)
     }
 
     func select(index: Int) {
@@ -70,12 +88,14 @@ final class KeyCalloutView: UIView {
                 lab.textColor = .black
             }
         }
+        scrollSelectedIntoView(animated: true)
     }
 
     func select(atLocationInCallout x: CGFloat) {
         guard !labels.isEmpty else { return }
+        let contentX = x + scrollView.contentOffset.x - scrollView.frame.minX
         let idx = labels.enumerated().min(by: {
-            abs($0.element.center.x - x) < abs($1.element.center.x - x)
+            abs($0.element.center.x - contentX) < abs($1.element.center.x - contentX)
         })?.offset ?? 0
         select(index: idx)
     }
@@ -83,5 +103,12 @@ final class KeyCalloutView: UIView {
     var selectedAction: ZhuyinPhoneLayout.KeyAction? {
         guard items.indices.contains(selectedIndex) else { return nil }
         return items[selectedIndex].action
+    }
+
+    private func scrollSelectedIntoView(animated: Bool) {
+        guard labels.indices.contains(selectedIndex) else { return }
+        let lab = labels[selectedIndex]
+        let target = lab.frame.insetBy(dx: -12, dy: 0)
+        scrollView.scrollRectToVisible(target, animated: animated)
     }
 }

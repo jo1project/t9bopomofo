@@ -41,10 +41,16 @@ final class InputEngine: ObservableObject {
         if !usingRime {
             usingRime = rime.start(bundle: bundle)
         }
+        // Lexicon is needed for Gboard-like neighbor fuzzy even when Rime is primary.
+        ensureLexiconLoaded(bundle: bundle)
         if usingRime {
             syncFromRime()
             return
         }
+        refreshSwiftCandidates()
+    }
+
+    private func ensureLexiconLoaded(bundle: Bundle = .main) {
         guard !loaded else { return }
         do {
             try lexicon.loadFromBundle(bundle: bundle)
@@ -67,7 +73,6 @@ final class InputEngine: ObservableObject {
                 }
             }
         }
-        refreshSwiftCandidates()
     }
 
     func load(from urls: [URL]) throws {
@@ -144,9 +149,14 @@ final class InputEngine: ObservableObject {
     }
 
     func selectCandidate(_ candidate: Candidate) -> String {
-        // Next-word suggestions (local / LLM) are not Rime candidates.
+        // Local/LLM/fuzzy corrections are not Rime candidate indices.
         if candidate.source == .prediction || candidate.source == .llm
-            || candidate.id.hasPrefix("pred-") || candidate.id.hasPrefix("llm-") {
+            || candidate.source == .fuzzyNeighbor || candidate.source == .fuzzyMissing
+            || candidate.id.hasPrefix("pred-") || candidate.id.hasPrefix("llm-")
+            || candidate.id.hasPrefix("fz-") {
+            if usingRime {
+                rime.clearComposition()
+            }
             return commitSuggestion(candidate.text)
         }
 
@@ -301,7 +311,7 @@ final class InputEngine: ObservableObject {
                 Candidate(id: "pred-\(idx)-\(w)", text: w, reading: "", score: 1000 - Double(idx), source: .prediction)
             }
         } else {
-            candidates = raw.enumerated().map { idx, item in
+            var merged = raw.enumerated().map { idx, item in
                 Candidate(
                     id: "rime-\(idx)",
                     text: item.text,
@@ -310,7 +320,60 @@ final class InputEngine: ObservableObject {
                     source: .exact
                 )
             }
+            // Gboard-like neighbor-key corrections (e.g. 飛有 keys → still offer 沒有).
+            merged = mergeFuzzyCorrections(into: merged, rimeInput: input)
+            candidates = Array(merged.prefix(candidateLimit))
         }
+    }
+
+    /// Append/insert same-length neighbor (and light missing-key) lexicon hits.
+    private func mergeFuzzyCorrections(into rimeCandidates: [Candidate], rimeInput: String) -> [Candidate] {
+        guard loaded else { return rimeCandidates }
+        let digits = String(rimeInput.filter { !T9KeyMap.toneKeys.contains($0) })
+        guard digits.count >= 2 else { return rimeCandidates }
+
+        var seen = Set(rimeCandidates.map(\.text))
+        let fuzzy = FuzzyMatcher.fuzzy(digits: digits, lexicon: lexicon, maxDistance: 1, limit: 10)
+
+        // Prefer same-length neighbor phrase corrections (typo on one key).
+        let sameLen = fuzzy
+            .filter { $0.entry.t9.count == digits.count }
+            .sorted { $0.entry.weight > $1.entry.weight }
+
+        var corrections: [Candidate] = []
+        for (i, m) in sameLen.enumerated() {
+            guard !seen.contains(m.entry.word) else { continue }
+            seen.insert(m.entry.word)
+            corrections.append(Candidate(
+                id: "fz-\(i)-\(m.entry.word)",
+                text: m.entry.word,
+                reading: m.entry.reading,
+                score: Double(m.entry.weight) * 0.55 - Double(m.distance) * 200,
+                source: m.kind
+            ))
+            if corrections.count >= 4 { break }
+        }
+
+        // A few missing-key recoveries at the end (lower priority).
+        if corrections.count < 4 {
+            for (i, m) in fuzzy.enumerated() where m.kind == .fuzzyMissing {
+                guard !seen.contains(m.entry.word) else { continue }
+                seen.insert(m.entry.word)
+                corrections.append(Candidate(
+                    id: "fz-miss-\(i)-\(m.entry.word)",
+                    text: m.entry.word,
+                    reading: m.entry.reading,
+                    score: Double(m.entry.weight) * 0.35,
+                    source: m.kind
+                ))
+                if corrections.count >= 4 { break }
+            }
+        }
+
+        guard !corrections.isEmpty else { return rimeCandidates }
+        if rimeCandidates.isEmpty { return corrections }
+        // Keep top Rime result, then corrections, then the rest — typo fixes stay visible.
+        return Array(rimeCandidates.prefix(1)) + corrections + Array(rimeCandidates.dropFirst())
     }
 
     // MARK: - Swift fallback ranking
@@ -409,6 +472,7 @@ final class InputEngine: ObservableObject {
         for m in FuzzyMatcher.fuzzy(digits: digits, lexicon: lexicon, maxDistance: 1, limit: 12) {
             let toneBonus = toneScore(tones: m.entry.tones) * 0.5
             let userBoost = userLexicon.boost(for: m.entry.word, previous: lastCommitted.isEmpty ? nil : lastCommitted)
+            let sameLength = m.entry.t9.count == digits.count
             items.append(T9SortFilter.Item(
                 candidate: Candidate(
                     id: "fz-\(m.entry.word)-\(m.entry.reading)",
@@ -418,7 +482,8 @@ final class InputEngine: ObservableObject {
                     source: m.kind
                 ),
                 coverage: m.entry.t9.count,
-                fullCoverage: m.entry.t9.count == digits.count && m.distance == 0,
+                // Same-length neighbor hits compete as full-coverage corrections (Gboard-like).
+                fullCoverage: sameLength,
                 orphanTone: false
             ))
         }

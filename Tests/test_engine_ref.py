@@ -179,6 +179,33 @@ def test_fuzzy_neighbor_and_missing():
     print("fuzzy OK", laya, "missing", missing)
 
 
+def test_fuzzy_mei_you_from_fei_you_keys():
+    """Fat-finger ㄈ(0) instead of ㄇ(7): typed 飛有 keys should still recover 沒有."""
+    entries = parse_dict(DICT / "bopomofo_t9.dict.yaml")
+    mei_you = encode_reading("mei2 you3")  # 7568
+    fei_you = encode_reading("fei1 you3")  # 0568
+    assert mei_you == "7568", mei_you
+    assert fei_you == "0568", fei_you
+    assert "7" in NEIGHBORS["0"]
+    by_t9 = {}
+    for word, reading, t9, weight in entries:
+        by_t9.setdefault(t9, []).append((word, reading, weight))
+    assert any(w == "沒有" for w, _, _ in by_t9.get(mei_you, [])), by_t9.get(mei_you)
+    # Neighbor substitution at pos0: 0 → 7 recovers 沒有
+    recovered = []
+    for i, ch in enumerate(fei_you):
+        for n in NEIGHBORS.get(ch, []):
+            mutated = list(fei_you)
+            mutated[i] = n
+            cand = "".join(mutated)
+            for word, reading, weight in by_t9.get(cand, []):
+                recovered.append((word, cand, weight))
+    words = {w for w, _, _ in recovered}
+    assert "沒有" in words, recovered
+    print("fuzzy 飛有→沒有 OK", fei_you, "→", mei_you)
+
+
+
 def test_clear_on_symbol_behavior():
     """Product rule: symbol/space/return clears composing and does NOT commit candidate."""
     composing = "3863"
@@ -337,6 +364,7 @@ def main() -> int:
     test_encode_samples()
     test_dict_contains_targets()
     test_fuzzy_neighbor_and_missing()
+    test_fuzzy_mei_you_from_fei_you_keys()
     test_clear_on_symbol_behavior()
     test_success_phrase()
     test_bushixing_vs_buxing()

@@ -130,8 +130,10 @@ final class ZhuyinKeyboardView: UIView {
         calloutHost = host
         let callout = KeyCalloutView()
         callout.configure(items: items, selected: 0)
-        let itemW: CGFloat = 48
-        let w = max(CGFloat(items.count) * itemW + 8, 56)
+        let itemW: CGFloat = 44
+        let contentW = CGFloat(items.count) * itemW + 8
+        let maxW = max(56, host.bounds.width - 12)
+        let w = min(contentW, maxW)
         let h: CGFloat = 56
         let btnFrame = button.convert(button.bounds, to: host)
         var x = btnFrame.midX - w / 2

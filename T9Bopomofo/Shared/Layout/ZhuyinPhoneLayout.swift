@@ -36,19 +36,25 @@ enum ZhuyinPhoneLayout {
     }
 
     /// Shared punctuation callouts for 。 long-press.
+    /// Brackets are placed early so they stay reachable on narrow screens.
     static let punctuationCallouts: [Callout] = [
         Callout(id: "，", label: "，", action: .symbol("，")),
         Callout(id: "？", label: "？", action: .symbol("？")),
         Callout(id: "！", label: "！", action: .symbol("！")),
         Callout(id: "、", label: "、", action: .symbol("、")),
+        Callout(id: "「", label: "「", action: .symbol("「")),
+        Callout(id: "」", label: "」", action: .symbol("」")),
+        Callout(id: "『", label: "『", action: .symbol("『")),
+        Callout(id: "』", label: "』", action: .symbol("』")),
+        Callout(id: "（", label: "（", action: .symbol("（")),
+        Callout(id: "）", label: "）", action: .symbol("）")),
+        Callout(id: "【", label: "【", action: .symbol("【")),
+        Callout(id: "】", label: "】", action: .symbol("】")),
         Callout(id: "…", label: "…", action: .symbol("…")),
         Callout(id: "：", label: "：", action: .symbol("：")),
         Callout(id: "；", label: "；", action: .symbol("；")),
-        Callout(id: "「", label: "「", action: .symbol("「")),
-        Callout(id: "」", label: "」", action: .symbol("」")),
-        Callout(id: "（", label: "（", action: .symbol("（")),
-        Callout(id: "）", label: "）", action: .symbol("）")),
         Callout(id: "～", label: "～", action: .symbol("～")),
+        Callout(id: "—", label: "—", action: .symbol("—")),
         Callout(id: "@", label: "@", action: .symbol("@")),
         Callout(id: "#", label: "#", action: .symbol("#")),
     ]
