@@ -45,7 +45,7 @@ struct SetupView: View {
                         Text("• 。點＝句號／長按標點；123 長按表情；空格/EN；候選列 ↓ 隱藏鍵盤")
                         Text("• 英文鍵盤：⇧ 點一下大寫下一個、再點 ⇪ 鎖定")
                         Text("• 備份：本機 JSON 匯出／匯入，可選 iCloud KVS")
-                        Text("• LLM：淺藍 ✦ 標記聯想詞；OpenAI 付費／Groq 免費相容")
+                        Text("• LLM：選服務商自動填範例；淺藍 ✦ 為聯想詞")
                     }
                 }
                 .padding()
@@ -163,6 +163,7 @@ struct BackupDocument: FileDocument {
 
 struct LLMSettingsView: View {
     @State private var enabled = AppSettings.shared.llmEnabled
+    @State private var provider = LLMProviderPreset.matching(baseURL: AppSettings.shared.llmBaseURL)
     @State private var baseURL = AppSettings.shared.llmBaseURL
     @State private var apiKey = AppSettings.shared.llmAPIKey
     @State private var model = AppSettings.shared.llmModel
@@ -182,19 +183,18 @@ struct LLMSettingsView: View {
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
-                Section("費用說明") {
-                    Text("OpenAI（預設）需要付費／帳戶有額度，免費試用額用完就會失敗。")
-                    Text("也可用其他 OpenAI 相容服務（有免費額度者例如 Groq），改 Base URL 與 Model 即可。")
+                Section("服務商") {
+                    Picker("API", selection: $provider) {
+                        ForEach(LLMProviderPreset.allCases) { p in
+                            Text(p.title).tag(p)
+                        }
+                    }
+                    .onChange(of: provider) { _, p in
+                        applyProvider(p)
+                    }
+                    Text(provider.note)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
-                    Button("填入 Groq 範例") {
-                        baseURL = "https://api.groq.com/openai/v1"
-                        model = "groq/compound-mini"
-                        AppSettings.shared.llmBaseURL = baseURL
-                        AppSettings.shared.llmModel = model
-                        diagnostics = AppSettings.shared.llmDiagnostics
-                        testStatus = "已填 Groq URL／Model（groq/compound-mini），請貼上 console.groq.com 的 Key"
-                    }
                 }
                 Section("OpenAI 相容 API") {
                     TextField("Base URL", text: $baseURL)
@@ -229,6 +229,7 @@ struct LLMSettingsView: View {
                         baseURL = AppSettings.shared.llmBaseURL
                         apiKey = AppSettings.shared.llmAPIKey
                         model = AppSettings.shared.llmModel
+                        provider = LLMProviderPreset.matching(baseURL: baseURL)
                         diagnostics = AppSettings.shared.llmDiagnostics
                     }
                 }
@@ -254,8 +255,30 @@ struct LLMSettingsView: View {
             .navigationTitle("LLM 預測")
             .onAppear {
                 AppSettings.shared.reloadFromDisk()
+                enabled = AppSettings.shared.llmEnabled
+                baseURL = AppSettings.shared.llmBaseURL
+                apiKey = AppSettings.shared.llmAPIKey
+                model = AppSettings.shared.llmModel
+                provider = LLMProviderPreset.matching(baseURL: baseURL)
                 diagnostics = AppSettings.shared.llmDiagnostics
             }
+        }
+    }
+
+    private func applyProvider(_ p: LLMProviderPreset) {
+        if let url = p.exampleBaseURL {
+            baseURL = url
+            AppSettings.shared.llmBaseURL = url
+        }
+        if let m = p.exampleModel {
+            model = m
+            AppSettings.shared.llmModel = m
+        }
+        diagnostics = AppSettings.shared.llmDiagnostics
+        if p == .custom {
+            testStatus = "自訂：請自行填 Base URL／Model／Key"
+        } else {
+            testStatus = "已填 \(p.title) 範例，請貼上該服務的 API Key"
         }
     }
 }
