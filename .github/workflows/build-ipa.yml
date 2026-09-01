@@ -1,0 +1,117 @@
+name: Build Unsigned IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - cursor/t9-zhuyin-keyboard-28d5
+      - cursor/jo-icon-and-ipa-23f1
+      - cursor/fuzzy-mei-you-punct-23f1
+      - main
+    paths:
+      - "T9Bopomofo/**"
+      - "Resources/**"
+      - "Scripts/**"
+      - "project.yml"
+      - ".github/workflows/build-ipa.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t9-ipa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-ipa:
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select latest Xcode
+        run: |
+          set -euo pipefail
+          XCODE_APP="$(ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -1)"
+          if [[ -z "${XCODE_APP}" ]]; then
+            echo "::error::No Xcode.app found"
+            exit 1
+          fi
+          echo "Using ${XCODE_APP}"
+          sudo xcode-select -s "${XCODE_APP}/Contents/Developer"
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Download librime frameworks
+        run: ./Scripts/download-frameworks.sh
+
+      - name: Download essay + prelude
+        run: ./Scripts/download-models.sh
+
+      - name: Engine reference tests
+        run: python3 Tests/test_engine_ref.py
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build unsigned (app + keyboard extension)
+        run: |
+          set -euo pipefail
+          set -o pipefail
+          xcodebuild \
+            -project T9Bopomofo.xcodeproj \
+            -scheme T9Bopomofo \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            clean build | tee xcodebuild.log
+
+      - name: Package IPA
+        run: |
+          set -euo pipefail
+          APP_PATH="build/Build/Products/Release-iphoneos/T9Bopomofo.app"
+          if [[ ! -d "$APP_PATH" ]]; then
+            echo "::error::App bundle not found at $APP_PATH"
+            find build/Build/Products -maxdepth 3 -type d -name "*.app" -o -name "*.appex" || true
+            exit 1
+          fi
+          if [[ ! -d "$APP_PATH/PlugIns/T9Keyboard.appex" ]]; then
+            echo "::warning::T9Keyboard.appex not found under PlugIns; listing app contents:"
+            find "$APP_PATH" -maxdepth 3 | head -100
+          fi
+          # Sanity: librime symbols should be linked into the appex
+          APPEX="$APP_PATH/PlugIns/T9Keyboard.appex/T9Keyboard"
+          if [[ -f "$APPEX" ]]; then
+            echo "Keyboard binary size: $(ls -lh "$APPEX" | awk '{print $5}')"
+            nm -u "$APPEX" 2>/dev/null | head -5 || true
+          fi
+          rm -rf Payload
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          zip -qry T9Bopomofo-unsigned.ipa Payload
+          ls -lh T9Bopomofo-unsigned.ipa
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: T9Bopomofo-unsigned-ipa
+          path: T9Bopomofo-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: T9Bopomofo-xcodebuild-log
+          path: xcodebuild.log
+          if-no-files-found: warn
+          retention-days: 7
