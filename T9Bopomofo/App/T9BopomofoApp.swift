@@ -28,13 +28,13 @@ struct SetupView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("T9 注音鍵盤")
+                    Text("Jo一個T9注音")
                         .font(.largeTitle.bold())
                     Text("內部 IPA／TestFlight 測試用。請依下列步驟啟用鍵盤並開啟「允許完整取用」。")
                         .foregroundStyle(.secondary)
 
                     numbered("1", "打開「設定 → 一般 → 鍵盤 → 鍵盤」")
-                    numbered("2", "新增鍵盤，選擇「T9 注音」")
+                    numbered("2", "新增鍵盤，選擇「Jo一個T9注音」")
                     numbered("3", "點進該鍵盤，開啟「允許完整取用」（學習／備份／LLM 需要）")
                     numbered("4", "在任意 App 切換到此鍵盤開始測試")
 

@@ -28,6 +28,7 @@ targets:
       PRODUCT_BUNDLE_IDENTIFIER: com.jo1project.t9bopomofo
       INFOPLIST_FILE: T9Bopomofo/App/Info.plist
       CODE_SIGN_ENTITLEMENTS: T9Bopomofo/App/App.entitlements
+      ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       DEVELOPMENT_TEAM: ""
       CODE_SIGN_IDENTITY: ""
       PROVISIONING_PROFILE_SPECIFIER: ""
@@ -98,7 +99,7 @@ targets:
     info:
       path: T9Bopomofo/Keyboard/Info.plist
       properties:
-        CFBundleDisplayName: T9 注音
+        CFBundleDisplayName: Jo一個T9注音
         NSExtension:
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).KeyboardViewController
           NSExtensionPointIdentifier: com.apple.keyboard-service
