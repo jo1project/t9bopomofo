@@ -9,10 +9,18 @@ REPO="${LIBRIMEKIT_REPO:-fulanto/LibrimeKit}"
 URL="https://github.com/${REPO}/releases/download/${VER}/Frameworks.tgz"
 
 MARKER="$OUT/.librimekit_version"
+has_octagram() {
+  local lib="$1"
+  [[ -n "$lib" && -f "$lib" ]] || return 1
+  # Prefer archive member names (reliable on macOS + Linux); fall back to strings.
+  ar -t "$lib" 2>/dev/null | grep -Eqi 'octagram|grammar_module|gram_db' && return 0
+  strings "$lib" 2>/dev/null | grep -Eq 'rime_require_module_octagram|octagram\.o' && return 0
+  return 1
+}
+
 if [[ -d "$OUT/librime.xcframework" && -f "$MARKER" ]] && grep -qx "$REPO@$VER" "$MARKER"; then
-  # Confirm octagram is present
   LIB="$(find "$OUT/librime.xcframework" -path '*ios-arm64*' -name '*.a' | head -1)"
-  if [[ -n "$LIB" ]] && strings "$LIB" 2>/dev/null | grep -q 'rime_require_module_octagram'; then
+  if has_octagram "$LIB"; then
     echo "Frameworks already present ($REPO@$VER, octagram OK)"
     exit 0
   fi
@@ -34,8 +42,9 @@ rm -rf "$OUT/Headers"
 rm -rf "$TMP"
 
 LIB="$(find "$OUT/librime.xcframework" -path '*ios-arm64*' -name '*.a' | head -1 || true)"
-if [[ -z "$LIB" ]] || ! strings "$LIB" 2>/dev/null | grep -q 'rime_require_module_octagram'; then
-  echo "ERROR: downloaded librime lacks octagram module" >&2
+if ! has_octagram "$LIB"; then
+  echo "ERROR: downloaded librime lacks octagram module (lib=$LIB)" >&2
+  ar -t "$LIB" 2>/dev/null | head -40 >&2 || true
   exit 1
 fi
 
