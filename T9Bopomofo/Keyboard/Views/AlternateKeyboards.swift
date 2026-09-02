@@ -315,7 +315,7 @@ final class EmojiKeyboardView: UIView {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        backgroundColor = UIColor(white: 0.86, alpha: 1)
+        backgroundColor = KeyboardChrome.background(for: traitCollection)
 
         let bottom = UIStackView()
         bottom.axis = .horizontal
@@ -325,17 +325,17 @@ final class EmojiKeyboardView: UIView {
 
         let back = UIButton(type: .system)
         back.setTitle("注音", for: .normal)
-        back.setTitleColor(.black, for: .normal)
+        back.setTitleColor(KeyboardChrome.keyTitle(for: traitCollection), for: .normal)
         back.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
-        back.backgroundColor = UIColor(white: 0.72, alpha: 1)
+        back.backgroundColor = KeyboardChrome.keyFill(for: traitCollection, style: .function)
         back.layer.cornerRadius = 6
         back.addAction(UIAction { [weak self] _ in self?.onMode?(.zhuyin) }, for: .touchUpInside)
 
         let en = UIButton(type: .system)
         en.setTitle("EN", for: .normal)
-        en.setTitleColor(.black, for: .normal)
+        en.setTitleColor(KeyboardChrome.keyTitle(for: traitCollection), for: .normal)
         en.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
-        en.backgroundColor = UIColor(white: 0.72, alpha: 1)
+        en.backgroundColor = KeyboardChrome.keyFill(for: traitCollection, style: .function)
         en.layer.cornerRadius = 6
         en.addAction(UIAction { [weak self] _ in self?.onMode?(.english) }, for: .touchUpInside)
 
