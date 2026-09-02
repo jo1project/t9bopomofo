@@ -41,10 +41,16 @@ final class InputEngine: ObservableObject {
         if !usingRime {
             usingRime = rime.start(bundle: bundle)
         }
+        // Always try to load Swift lexicon so fuzzy can merge alongside Rime.
+        ensureLexiconLoaded(bundle: bundle)
         if usingRime {
             syncFromRime()
             return
         }
+        refreshSwiftCandidates()
+    }
+
+    private func ensureLexiconLoaded(bundle: Bundle) {
         guard !loaded else { return }
         do {
             try lexicon.loadFromBundle(bundle: bundle)
@@ -67,7 +73,6 @@ final class InputEngine: ObservableObject {
                 }
             }
         }
-        refreshSwiftCandidates()
     }
 
     func load(from urls: [URL]) throws {
@@ -301,7 +306,7 @@ final class InputEngine: ObservableObject {
                 Candidate(id: "pred-\(idx)-\(w)", text: w, reading: "", score: 1000 - Double(idx), source: .prediction)
             }
         } else {
-            candidates = raw.enumerated().map { idx, item in
+            var merged = raw.enumerated().map { idx, item in
                 Candidate(
                     id: "rime-\(idx)",
                     text: item.text,
@@ -310,6 +315,24 @@ final class InputEngine: ObservableObject {
                     source: .exact
                 )
             }
+            if AppSettings.shared.fuzzyNeighborEffective, loaded {
+                let digits = String(input.filter { T9KeyMap.keyLabels[$0] != nil })
+                if digits.count >= 2 {
+                    var seen = Set(merged.map(\.text))
+                    for m in FuzzyMatcher.fuzzy(digits: digits, lexicon: lexicon, maxDistance: 1, limit: 8) {
+                        guard !seen.contains(m.entry.word) else { continue }
+                        seen.insert(m.entry.word)
+                        merged.append(Candidate(
+                            id: "fz-rime-\(m.entry.word)-\(m.entry.reading)",
+                            text: m.entry.word,
+                            reading: m.entry.reading,
+                            score: Double(m.entry.weight) * 0.35 - Double(m.distance) * 300,
+                            source: m.kind
+                        ))
+                    }
+                }
+            }
+            candidates = Array(merged.prefix(candidateLimit))
         }
     }
 
@@ -406,21 +429,23 @@ final class InputEngine: ObservableObject {
             }
         }
 
-        for m in FuzzyMatcher.fuzzy(digits: digits, lexicon: lexicon, maxDistance: 1, limit: 12) {
-            let toneBonus = toneScore(tones: m.entry.tones) * 0.5
-            let userBoost = userLexicon.boost(for: m.entry.word, previous: lastCommitted.isEmpty ? nil : lastCommitted)
-            items.append(T9SortFilter.Item(
-                candidate: Candidate(
-                    id: "fz-\(m.entry.word)-\(m.entry.reading)",
-                    text: m.entry.word,
-                    reading: m.entry.reading,
-                    score: Double(m.entry.weight) * 0.45 + toneBonus + userBoost - Double(m.distance) * 300,
-                    source: m.kind
-                ),
-                coverage: m.entry.t9.count,
-                fullCoverage: m.entry.t9.count == digits.count && m.distance == 0,
-                orphanTone: false
-            ))
+        if AppSettings.shared.fuzzyNeighborEffective {
+            for m in FuzzyMatcher.fuzzy(digits: digits, lexicon: lexicon, maxDistance: 1, limit: 12) {
+                let toneBonus = toneScore(tones: m.entry.tones) * 0.5
+                let userBoost = userLexicon.boost(for: m.entry.word, previous: lastCommitted.isEmpty ? nil : lastCommitted)
+                items.append(T9SortFilter.Item(
+                    candidate: Candidate(
+                        id: "fz-\(m.entry.word)-\(m.entry.reading)",
+                        text: m.entry.word,
+                        reading: m.entry.reading,
+                        score: Double(m.entry.weight) * 0.45 + toneBonus + userBoost - Double(m.distance) * 300,
+                        source: m.kind
+                    ),
+                    coverage: m.entry.t9.count,
+                    fullCoverage: m.entry.t9.count == digits.count && m.distance == 0,
+                    orphanTone: false
+                ))
+            }
         }
 
         items.sort { $0.candidate.score > $1.candidate.score }

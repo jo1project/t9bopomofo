@@ -12,8 +12,9 @@ settings:
     TARGETED_DEVICE_FAMILY: "1,2"
     IPHONEOS_DEPLOYMENT_TARGET: "17.0"
     GENERATE_INFOPLIST_FILE: NO
-    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_STYLE: Automatic
     CODE_SIGNING_ALLOWED: YES
+    DEVELOPMENT_TEAM: S24Z424MU4
     CLANG_CXX_LANGUAGE_STANDARD: "c++17"
     CLANG_CXX_LIBRARY: "libc++"
 
@@ -29,13 +30,16 @@ targets:
       INFOPLIST_FILE: T9Bopomofo/App/Info.plist
       CODE_SIGN_ENTITLEMENTS: T9Bopomofo/App/App.entitlements
       ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-      DEVELOPMENT_TEAM: ""
-      CODE_SIGN_IDENTITY: ""
+      DEVELOPMENT_TEAM: S24Z424MU4
+      CODE_SIGN_STYLE: Automatic
+      CODE_SIGN_IDENTITY: "Apple Development"
       PROVISIONING_PROFILE_SPECIFIER: ""
     dependencies:
       - target: T9Keyboard
         embed: true
         codeSign: false
+      - sdk: StoreKit.framework
+      - sdk: Security.framework
 
   T9Keyboard:
     type: app-extension
@@ -53,8 +57,9 @@ targets:
       PRODUCT_BUNDLE_IDENTIFIER: com.jo1project.t9bopomofo.keyboard
       INFOPLIST_FILE: T9Bopomofo/Keyboard/Info.plist
       CODE_SIGN_ENTITLEMENTS: T9Bopomofo/Keyboard/Keyboard.entitlements
-      DEVELOPMENT_TEAM: ""
-      CODE_SIGN_IDENTITY: ""
+      DEVELOPMENT_TEAM: S24Z424MU4
+      CODE_SIGN_STYLE: Automatic
+      CODE_SIGN_IDENTITY: "Apple Development"
       PROVISIONING_PROFILE_SPECIFIER: ""
       SKIP_INSTALL: YES
       LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks"
@@ -96,6 +101,8 @@ targets:
         embed: false
       - sdk: CoreFoundation.framework
       - sdk: Security.framework
+      - sdk: StoreKit.framework
+      - sdk: UIKit.framework
     info:
       path: T9Bopomofo/Keyboard/Info.plist
       properties:
@@ -117,5 +124,6 @@ schemes:
         T9Keyboard: all
     run:
       config: Debug
+      storeKitConfiguration: T9Bopomofo/App/Configuration.storekit
     archive:
       config: Release

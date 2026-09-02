@@ -24,6 +24,7 @@ final class EnglishKeyboardView: UIView {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
+        backgroundColor = KeyboardChrome.background(for: traitCollection)
         root.axis = .vertical
         root.spacing = 4
         root.distribution = .fillEqually
@@ -35,6 +36,12 @@ final class EnglishKeyboardView: UIView {
             root.trailingAnchor.constraint(equalTo: trailingAnchor),
             root.bottomAnchor.constraint(equalTo: bottomAnchor),
         ])
+        rebuild()
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        backgroundColor = KeyboardChrome.background(for: traitCollection)
         rebuild()
     }
 
@@ -162,12 +169,16 @@ final class EnglishKeyboardView: UIView {
     private func makeKey(_ title: String, isFunction: Bool, addTap: Bool = true, _ action: (() -> Void)? = nil) -> UIButton {
         let b = UIButton(type: .system)
         b.setTitle(title, for: .normal)
-        b.setTitleColor(.black, for: .normal)
+        let traits = traitCollection
+        b.setTitleColor(KeyboardChrome.keyTitle(for: traits), for: .normal)
         b.titleLabel?.font = .systemFont(ofSize: title == "space" || title == "return" ? 14 : 18, weight: .medium)
-        b.backgroundColor = isFunction ? UIColor(white: 0.72, alpha: 1) : .white
+        b.backgroundColor = KeyboardChrome.keyFill(for: traits, style: isFunction ? .function : .zhuyin)
         b.layer.cornerRadius = 6
         if addTap, let action {
-            b.addAction(UIAction { _ in action() }, for: .touchUpInside)
+            b.addAction(UIAction { _ in
+                KeyboardHaptics.keyTap()
+                action()
+            }, for: .touchUpInside)
         }
         return b
     }
@@ -254,10 +265,13 @@ final class SymbolKeyboardView: UIView {
     private func makeKey(_ title: String, _ action: @escaping () -> Void) -> UIButton {
         let b = UIButton(type: .system)
         b.setTitle(title, for: .normal)
-        b.setTitleColor(.black, for: .normal)
-        b.backgroundColor = .white
+        b.setTitleColor(KeyboardChrome.keyTitle(for: traitCollection), for: .normal)
+        b.backgroundColor = KeyboardChrome.keyFill(for: traitCollection, style: .zhuyin)
         b.layer.cornerRadius = 6
-        b.addAction(UIAction { _ in action() }, for: .touchUpInside)
+        b.addAction(UIAction { _ in
+            KeyboardHaptics.keyTap()
+            action()
+        }, for: .touchUpInside)
         return b
     }
 }

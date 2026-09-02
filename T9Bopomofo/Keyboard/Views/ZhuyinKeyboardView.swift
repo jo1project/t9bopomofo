@@ -18,10 +18,24 @@ final class ZhuyinKeyboardView: UIView {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        backgroundColor = UIColor(white: 0.78, alpha: 1)
-        separator.backgroundColor = UIColor(white: 0.45, alpha: 1)
+        applyChrome()
         addSubview(separator)
         buildKeys()
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        applyChrome()
+        for case let btn as KeyButton in keyButtons {
+            btn.applyChrome(traits: traitCollection)
+        }
+    }
+
+    private func applyChrome() {
+        backgroundColor = KeyboardChrome.background(for: traitCollection)
+        separator.backgroundColor = traitCollection.userInterfaceStyle == .dark
+            ? UIColor(white: 0.4, alpha: 1)
+            : UIColor(white: 0.45, alpha: 1)
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -129,9 +143,12 @@ final class ZhuyinKeyboardView: UIView {
         let host = window ?? self
         calloutHost = host
         let callout = KeyCalloutView()
-        callout.configure(items: items, selected: 0)
+        // Prefer centering default on a sensible pick for long punctuation lists.
+        let initial = items.count > 6 ? min(2, items.count - 1) : 0
+        callout.configure(items: items, selected: initial)
+        callout.setInitialIndex(initial)
         let itemW: CGFloat = 48
-        let w = max(CGFloat(items.count) * itemW + 8, 56)
+        let w = min(max(CGFloat(items.count) * itemW + 8, 56), host.bounds.width - 12)
         let h: CGFloat = 56
         let btnFrame = button.convert(button.bounds, to: host)
         var x = btnFrame.midX - w / 2
@@ -143,13 +160,14 @@ final class ZhuyinKeyboardView: UIView {
     }
 
     private func updateCalloutSelection(windowPoint: CGPoint) {
-        guard let callout = activeCallout, let host = calloutHost else { return }
-        let local = callout.convert(windowPoint, from: host.window ?? host)
-        callout.select(atLocationInCallout: local.x)
+        guard let callout = activeCallout else { return }
+        // In-place relative slide: use window X delta from press origin.
+        callout.select(trackingWindowX: windowPoint.x)
     }
 
     private func commitCallout() {
         if let action = activeCallout?.selectedAction {
+            KeyboardHaptics.commit()
             onAction?(action)
         }
         dismissCallout()
@@ -213,21 +231,27 @@ final class KeyButton: UIButton {
         titleLabel?.adjustsFontSizeToFitWidth = true
         // Zhuyin initials/finals: prefer staying large; tones match peers at 26.
         titleLabel?.minimumScaleFactor = style == .zhuyin ? 0.75 : 0.65
-
-        switch style {
-        case .function:
-            backgroundColor = UIColor(white: 0.72, alpha: 1)
-        case .tone:
-            backgroundColor = UIColor(white: 0.92, alpha: 1)
-        case .zhuyin:
-            backgroundColor = .white
-        }
+        keyStyle = style
+        applyChrome(traits: traitCollection)
         layer.cornerRadius = 7
         layer.shadowColor = UIColor.black.cgColor
         layer.shadowOpacity = 0.14
         layer.shadowOffset = CGSize(width: 0, height: 1)
         layer.shadowRadius = 0.5
         addTarget(self, action: #selector(tapped), for: .touchUpInside)
+    }
+
+    private var keyStyle: Style = .zhuyin
+
+    func applyChrome(traits: UITraitCollection) {
+        let fill: KeyboardChrome.KeyFillStyle
+        switch keyStyle {
+        case .zhuyin: fill = .zhuyin
+        case .tone: fill = .tone
+        case .function: fill = .function
+        }
+        backgroundColor = KeyboardChrome.keyFill(for: traits, style: fill)
+        setTitleColor(KeyboardChrome.keyTitle(for: traits), for: .normal)
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -248,7 +272,8 @@ final class KeyButton: UIButton {
         guard !items.isEmpty else { return }
         let lp = UILongPressGestureRecognizer(target: self, action: #selector(longPressed(_:)))
         lp.minimumPressDuration = 0.35
-        lp.allowableMovement = 80
+        // Allow generous finger travel while holding — selection is relative, not absolute hit-testing.
+        lp.allowableMovement = 120
         lp.cancelsTouchesInView = false
         addGestureRecognizer(lp)
     }
@@ -261,6 +286,7 @@ final class KeyButton: UIButton {
         guard !calloutActive else { return }
         // Backspace uses touchDown repeat path instead.
         guard repeatHandler == nil else { return }
+        KeyboardHaptics.keyTap()
         onTap?(keyAction)
     }
 
@@ -271,6 +297,7 @@ final class KeyButton: UIButton {
             guard !onLongPressCallout.isEmpty else { return }
             calloutActive = true
             onCalloutBegin?(onLongPressCallout)
+            // Seed relative origin immediately.
             onCalloutMove?(windowPoint)
         case .changed:
             guard calloutActive else { return }
