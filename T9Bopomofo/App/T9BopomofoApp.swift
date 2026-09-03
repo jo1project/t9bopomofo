@@ -130,15 +130,28 @@ struct KeyboardSettingsView: View {
 
 struct SponsorView: View {
     @ObservedObject private var store = SponsorStore.shared
+    private var appGroupOK: Bool { AppSettings.shared.appGroupAvailable }
 
     var body: some View {
         NavigationStack {
             Form {
+                if !appGroupOK {
+                    Section {
+                        Label("App Group 不可用", systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                        Text("目前這包多半是 unsigned／簽名不完整，主 App 的「測試解鎖」寫不進鍵盤共用空間，所以鍵盤會一直說要贊助。刪除重裝同一包通常無效。請用 Xcode + 你的開發者帳號正式簽名安裝（並在開發者後台為 App／鍵盤開啟 App Group：group.com.jo1project.t9bopomofo）。")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
                 Section {
                     if store.isSponsored {
                         Label("已解鎖贊助內容", systemImage: "checkmark.seal.fill")
                             .foregroundStyle(.green)
-                        Text("感謝支持。你可以使用 LLM，並可在設定中關閉臨近鍵容錯。")
+                        Text(appGroupOK
+                             ? "感謝支持。你可以使用 LLM，並可在設定中關閉臨近鍵容錯。"
+                             : "主 App 已標記解鎖，但鍵盤可能仍讀不到（見上方 App Group 警告）。")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     } else {
@@ -391,6 +404,11 @@ struct LLMSettingsView: View {
                         Text(diagnostics)
                             .font(.footnote)
                             .foregroundStyle(.secondary)
+                        if !AppSettings.shared.appGroupAvailable {
+                            Text("若顯示 App Group 不可用：請改用 Xcode 開發者簽名安裝，不要只重裝 unsigned IPA。")
+                                .font(.footnote)
+                                .foregroundStyle(.orange)
+                        }
                         Button("重新檢查") { reloadLocal() }
                     }
                     Section {
