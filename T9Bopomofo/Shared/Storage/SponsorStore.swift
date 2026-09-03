@@ -88,6 +88,19 @@ final class SponsorStore: ObservableObject {
         }
     }
 
+    func unlockForTesting(note: String = "測試解鎖：已開啟贊助內容") {
+        AppSettings.shared.isSponsored = true
+        isSponsored = true
+        statusMessage = note
+    }
+
+    func clearTestingUnlock() {
+        AppSettings.shared.isSponsored = false
+        AppSettings.shared.llmEnabled = false
+        isSponsored = false
+        statusMessage = "已清除測試解鎖"
+    }
+
     private func refreshEntitlements() async {
         var entitled = false
         for await result in Transaction.currentEntitlements {

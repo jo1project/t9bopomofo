@@ -187,21 +187,22 @@ struct SponsorView: View {
                     Section("狀態") { Text(store.statusMessage) }
                 }
 
-                #if DEBUG
-                Section("開發用") {
-                    Button("模擬已贊助（僅 Debug）") {
-                        AppSettings.shared.isSponsored = true
-                        store.statusMessage = "Debug：已標記贊助"
-                        Task { await store.refresh() }
+                // Unsigned / pre-ASC builds cannot complete StoreKit purchase.
+                // Keep a manual unlock so LLM can be tested before the first IAP ships.
+                Section {
+                    Button("測試解鎖（開啟 LLM）") {
+                        store.unlockForTesting()
                     }
-                    Button("清除贊助標記（僅 Debug）") {
-                        AppSettings.shared.isSponsored = false
-                        AppSettings.shared.llmEnabled = false
-                        store.statusMessage = "Debug：已清除"
-                        Task { await store.refresh() }
+                    .disabled(store.isSponsored)
+                    Button("清除測試解鎖", role: .destructive) {
+                        store.clearTestingUnlock()
                     }
+                    Text("內購正式上架並可購買後，可改走上方「贊助解鎖」。此按鈕僅方便目前測 LLM／截圖。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                } header: {
+                    Text("上架前測試")
                 }
-                #endif
             }
             .navigationTitle("贊助")
             .task { await store.refresh() }
