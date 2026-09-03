@@ -6,6 +6,7 @@ on:
     branches:
       - cursor/t9-zhuyin-keyboard-28d5
       - cursor/jo-icon-and-ipa-23f1
+      - cursor/app-polish-sponsor-99f2
       - main
     paths:
       - "T9Bopomofo/**"
