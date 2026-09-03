@@ -1,0 +1,45 @@
+{
+  "identifier" : "T9BopomofoStore",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+    {
+      "displayPrice" : "0.99",
+      "familyShareable" : false,
+      "internalID" : "6500000001",
+      "localizations" : [
+        {
+          "description" : "單次贊助解鎖 LLM，並可關閉臨近鍵容錯。",
+          "displayName" : "贊助解鎖",
+          "locale" : "zh_TW"
+        },
+        {
+          "description" : "One-time tip unlocks LLM and fuzzy toggle.",
+          "displayName" : "Sponsor Unlock",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.jo1project.t9bopomofo.sponsor",
+      "referenceName" : "Sponsor Unlock",
+      "type" : "NonConsumable"
+    }
+  ],
+  "settings" : {
+    "_applicationInternalID" : "6500000000",
+    "_developerTeamID" : "S24Z424MU4",
+    "_failTransactionsEnabled" : false,
+    "_locale" : "zh_TW",
+    "_storefront" : "TWN",
+    "_storeKitErrors" : [
+
+    ]
+  },
+  "subscriptionGroups" : [
+
+  ],
+  "version" : {
+    "major" : 3,
+    "minor" : 0
+  }
+}

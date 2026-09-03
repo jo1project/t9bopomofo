@@ -1,0 +1,130 @@
+name: T9Bopomofo
+options:
+  bundleIdPrefix: com.jo1project
+  deploymentTarget:
+    iOS: "17.0"
+  xcodeVersion: "15.0"
+  createIntermediateGroups: true
+
+settings:
+  BASE:
+    SWIFT_VERSION: "5.0"
+    TARGETED_DEVICE_FAMILY: "1,2"
+    IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+    GENERATE_INFOPLIST_FILE: NO
+    CODE_SIGN_STYLE: Automatic
+    CODE_SIGNING_ALLOWED: YES
+    DEVELOPMENT_TEAM: S24Z424MU4
+    CLANG_CXX_LANGUAGE_STANDARD: "c++17"
+    CLANG_CXX_LIBRARY: "libc++"
+
+targets:
+  T9Bopomofo:
+    type: application
+    platform: iOS
+    sources:
+      - path: T9Bopomofo/App
+      - path: T9Bopomofo/Shared
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.jo1project.t9bopomofo
+      INFOPLIST_FILE: T9Bopomofo/App/Info.plist
+      CODE_SIGN_ENTITLEMENTS: T9Bopomofo/App/App.entitlements
+      ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+      DEVELOPMENT_TEAM: S24Z424MU4
+      CODE_SIGN_STYLE: Automatic
+      # Let Automatic signing pick Development vs Distribution per action.
+      CODE_SIGN_IDENTITY: ""
+      PROVISIONING_PROFILE_SPECIFIER: ""
+    dependencies:
+      - target: T9Keyboard
+        embed: true
+        codeSign: false
+      - sdk: StoreKit.framework
+      - sdk: Security.framework
+
+  T9Keyboard:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: T9Bopomofo/Keyboard
+      - path: T9Bopomofo/Shared
+      - path: Resources/rime
+        buildPhase: resources
+        type: folder
+      - path: Resources/layouts
+        buildPhase: resources
+        type: folder
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.jo1project.t9bopomofo.keyboard
+      INFOPLIST_FILE: T9Bopomofo/Keyboard/Info.plist
+      CODE_SIGN_ENTITLEMENTS: T9Bopomofo/Keyboard/Keyboard.entitlements
+      DEVELOPMENT_TEAM: S24Z424MU4
+      CODE_SIGN_STYLE: Automatic
+      CODE_SIGN_IDENTITY: ""
+      PROVISIONING_PROFILE_SPECIFIER: ""
+      SKIP_INSTALL: YES
+      LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks"
+      SWIFT_OBJC_BRIDGING_HEADER: T9Bopomofo/RimeBridge/T9Bopomofo-Bridging-Header.h
+      HEADER_SEARCH_PATHS: "$(inherited) $(SRCROOT)/T9Bopomofo/RimeBridge/include"
+      FRAMEWORK_SEARCH_PATHS: "$(inherited) $(SRCROOT)/Frameworks"
+      OTHER_LDFLAGS: "$(inherited) -lc++ -liconv -lz"
+      CLANG_ENABLE_MODULES: YES
+    dependencies:
+      - framework: Frameworks/librime.xcframework
+        embed: false
+      - framework: Frameworks/boost_atomic.xcframework
+        embed: false
+      - framework: Frameworks/boost_filesystem.xcframework
+        embed: false
+      - framework: Frameworks/boost_locale.xcframework
+        embed: false
+      - framework: Frameworks/boost_regex.xcframework
+        embed: false
+      - framework: Frameworks/boost_system.xcframework
+        embed: false
+      - framework: Frameworks/icudata.xcframework
+        embed: false
+      - framework: Frameworks/icui18n.xcframework
+        embed: false
+      - framework: Frameworks/icuio.xcframework
+        embed: false
+      - framework: Frameworks/icuuc.xcframework
+        embed: false
+      - framework: Frameworks/libglog.xcframework
+        embed: false
+      - framework: Frameworks/libleveldb.xcframework
+        embed: false
+      - framework: Frameworks/libmarisa.xcframework
+        embed: false
+      - framework: Frameworks/libopencc.xcframework
+        embed: false
+      - framework: Frameworks/libyaml-cpp.xcframework
+        embed: false
+      - sdk: CoreFoundation.framework
+      - sdk: Security.framework
+      - sdk: StoreKit.framework
+      - sdk: UIKit.framework
+    info:
+      path: T9Bopomofo/Keyboard/Info.plist
+      properties:
+        CFBundleDisplayName: Jo一個T9注音
+        NSExtension:
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).KeyboardViewController
+          NSExtensionPointIdentifier: com.apple.keyboard-service
+          NSExtensionAttributes:
+            IsASCIICapable: false
+            PrefersRightToLeft: false
+            PrimaryLanguage: zh-Hant
+            RequestsOpenAccess: true
+
+schemes:
+  T9Bopomofo:
+    build:
+      targets:
+        T9Bopomofo: all
+        T9Keyboard: all
+    run:
+      config: Debug
+      storeKitConfiguration: T9Bopomofo/App/Configuration.storekit
+    archive:
+      config: Release

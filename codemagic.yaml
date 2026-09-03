@@ -1,0 +1,76 @@
+workflows:
+  ios-testflight:
+    name: iOS TestFlight (signed)
+    max_build_duration: 120
+    instance_type: mac_mini_m2
+    integrations:
+      app_store_connect: JoT9ASC
+    environment:
+      vars:
+        BUNDLE_ID: com.jo1project.t9bopomofo
+        BUNDLE_ID_KEYBOARD: com.jo1project.t9bopomofo.keyboard
+        XCODE_PROJECT: T9Bopomofo.xcodeproj
+        XCODE_SCHEME: T9Bopomofo
+      xcode: latest
+      cocoapods: default
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: cursor/app-polish-sponsor-99f2
+          include: true
+          source: true
+        - pattern: main
+          include: true
+          source: true
+    scripts:
+      - name: Install XcodeGen
+        script: |
+          brew install xcodegen
+      - name: Download librime + models
+        script: |
+          chmod +x Scripts/download-frameworks.sh Scripts/download-models.sh
+          ./Scripts/download-frameworks.sh
+          ./Scripts/download-models.sh
+      - name: Generate Xcode project
+        script: |
+          xcodegen generate
+          ls -la "$XCODE_PROJECT"
+      - name: Set up code signing
+        script: |
+          # Uses Codemagic ↔ App Store Connect integration to fetch/create
+          # Distribution certs + profiles for app + keyboard extension.
+          xcode-project use-profiles
+      - name: Incremental build number (optional)
+        script: |
+          LATEST=$(app-store-connect get-latest-testflight-build-number "$BUNDLE_ID" || echo "0")
+          NEW=$((LATEST + 1))
+          echo "CFBundleVersion -> $NEW"
+          plutil -replace CFBundleVersion -string "$NEW" T9Bopomofo/App/Info.plist
+          # Keyboard Info.plist may use generated keys; bump if present
+          if [ -f T9Bopomofo/Keyboard/Info.plist ]; then
+            /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $NEW" T9Bopomofo/Keyboard/Info.plist \
+              || /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $NEW" T9Bopomofo/Keyboard/Info.plist \
+              || true
+          fi
+      - name: Build ipa
+        script: |
+          xcode-project build-ipa \
+            --project "$XCODE_PROJECT" \
+            --scheme "$XCODE_SCHEME"
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+    publishing:
+      email:
+        recipients:
+          - $CM_BUILD_EMAIL
+        notify:
+          success: true
+          failure: true
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        # Internal testing only until screenshots/metadata ready
+        submit_to_app_store: false

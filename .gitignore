@@ -1,0 +1,14 @@
+.DS_Store
+DerivedData/
+build/
+*.xcuserstate
+xcuserdata/
+*.gram
+essay.txt
+Frameworks/
+*.xcframework
+.SwiftPM/
+.swiftpm/
+__pycache__/
+*.pyc
+T9Bopomofo.xcodeproj/
