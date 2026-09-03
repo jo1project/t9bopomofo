@@ -344,7 +344,7 @@ struct LLMSettingsView: View {
                             AppSettings.shared.llmEnabled = v
                             diagnostics = AppSettings.shared.llmDiagnostics
                         }
-                    Text("選詞上屏後會出現淺藍 ✦ 聯想。需鍵盤「完整取用」。API Key 存在 Keychain。")
+                    Text("選詞上屏後會出現淺藍 ✦ 聯想。需鍵盤「完整取用」。請確認上方「啟用 LLM 聯想」已打開。")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }

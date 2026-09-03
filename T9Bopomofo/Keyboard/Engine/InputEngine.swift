@@ -226,9 +226,8 @@ final class InputEngine: ObservableObject {
         llmTask?.cancel()
         AppSettings.shared.reloadFromDisk()
         guard AppSettings.shared.canUseLLM else {
-            predictionStatus = AppSettings.shared.llmAPIKey.isEmpty
-                ? "LLM未設定：開App→LLM分頁"
-                : (AppSettings.shared.llmEnabled ? "" : "LLM已關閉")
+            let reason = AppSettings.shared.llmBlockedReason
+            predictionStatus = reason.isEmpty ? "LLM未就緒" : reason
             onCandidatesChanged?()
             return
         }

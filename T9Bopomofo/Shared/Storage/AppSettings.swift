@@ -125,17 +125,26 @@ final class AppSettings: @unchecked Sendable {
         get {
             if let kc = KeychainStore.get(account: apiKeyAccount), !kc.isEmpty { return kc }
             reloadFromDiskIfNeeded()
-            if let fileCache, !fileCache.llmAPIKey.isEmpty { return fileCache.llmAPIKey }
-            return defaults.string(forKey: Key.llmAPIKey) ?? ""
+            if let fileCache {
+                let fileKey = fileCache.llmAPIKey
+                // Placeholder means host saved to Keychain only — keyboard may not see Keychain.
+                if !fileKey.isEmpty, fileKey != "•keychain•" { return fileKey }
+            }
+            let legacy = defaults.string(forKey: Key.llmAPIKey) ?? ""
+            if legacy == "•keychain•" { return "" }
+            return legacy
         }
         set {
             KeychainStore.set(newValue, account: apiKeyAccount)
-            // Keep a presence flag for keyboard diagnostics; avoid writing full key to file when possible.
-            update { $0.llmAPIKey = newValue.isEmpty ? "" : "•keychain•" }
-            // Also clear legacy plaintext if emptying.
+            // Also mirror into App Group JSON so the keyboard extension can read it.
+            // (Keychain is not shared with the appex unless an access group is configured.)
+            update { $0.llmAPIKey = newValue }
             if newValue.isEmpty {
                 defaults.removeObject(forKey: Key.llmAPIKey)
+            } else {
+                defaults.set(newValue, forKey: Key.llmAPIKey)
             }
+            defaults.synchronize()
         }
     }
 
@@ -200,7 +209,22 @@ final class AppSettings: @unchecked Sendable {
     }
 
     var canUseLLM: Bool {
-        isSponsored && llmEnabled && !llmAPIKey.isEmpty
+        isSponsored && llmEnabled && hasUsableAPIKey
+    }
+
+    /// True when a real API key is available to this process (host or keyboard).
+    var hasUsableAPIKey: Bool {
+        let key = llmAPIKey
+        return !key.isEmpty && key != "•keychain•"
+    }
+
+    /// Why the keyboard cannot run LLM right now (empty if OK).
+    var llmBlockedReason: String {
+        reloadFromDisk()
+        if !isSponsored { return "需先贊助／測試解鎖" }
+        if !llmEnabled { return "LLM已關閉：App→LLM打開開關" }
+        if !hasUsableAPIKey { return "LLM未設定API Key" }
+        return ""
     }
 
     /// Human-readable diagnostics for the settings screen / keyboard.
@@ -216,7 +240,7 @@ final class AppSettings: @unchecked Sendable {
         }
         parts.append(isSponsored ? "贊助：已解鎖" : "贊助：未解鎖（LLM 需單次贊助）")
         parts.append(llmEnabled ? "開關：開" : "開關：關")
-        parts.append(llmAPIKey.isEmpty ? "Key：未填" : "Key：已填（Keychain）")
+        parts.append(hasUsableAPIKey ? "Key：已填" : "Key：未填／鍵盤讀不到")
         parts.append("Model：\(llmModel)")
         parts.append(fuzzyNeighborEffective ? "臨近鍵容錯：開" : "臨近鍵容錯：關")
         return parts.joined(separator: "\n")
@@ -240,6 +264,16 @@ final class AppSettings: @unchecked Sendable {
                 KeychainStore.set(payload.llmAPIKey, account: apiKeyAccount)
             }
             defaults.synchronize()
+        }
+        // Ensure keyboard-readable App Group file has the real key if Keychain has it.
+        if let kc = KeychainStore.get(account: apiKeyAccount), !kc.isEmpty {
+            var payload = fileCache ?? currentPayload()
+            if payload.llmAPIKey.isEmpty || payload.llmAPIKey == "•keychain•" {
+                payload.llmAPIKey = kc
+                fileCache = payload
+                defaults.set(kc, forKey: Key.llmAPIKey)
+                writeFileUnlocked(payload)
+            }
         }
     }
 
@@ -291,10 +325,11 @@ final class AppSettings: @unchecked Sendable {
         guard let url = settingsFileURL else { return }
         let dir = url.deletingLastPathComponent()
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        // Never persist raw API key in the shared JSON when Keychain holds it.
+        // Prefer writing a real key so the keyboard extension can read it from App Group.
         var safe = payload
-        if KeychainStore.get(account: apiKeyAccount) != nil {
-            safe.llmAPIKey = "•keychain•"
+        if safe.llmAPIKey.isEmpty || safe.llmAPIKey == "•keychain•",
+           let kc = KeychainStore.get(account: apiKeyAccount), !kc.isEmpty {
+            safe.llmAPIKey = kc
         }
         guard let data = try? JSONEncoder().encode(safe) else { return }
         try? data.write(to: url, options: [.atomic])

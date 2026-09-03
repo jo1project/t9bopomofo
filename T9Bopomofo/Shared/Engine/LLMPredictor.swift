@@ -16,10 +16,8 @@ actor LLMPredictor {
     func suggestDetailed(after context: String, limit: Int = 5) async -> SuggestResult {
         let settings = AppSettings.shared
         guard settings.canUseLLM else {
-            if !settings.isSponsored {
-                return SuggestResult(words: [], errorMessage: "需先單次贊助解鎖 LLM")
-            }
-            return SuggestResult(words: [], errorMessage: "未啟用或未填 API Key")
+            let reason = settings.llmBlockedReason
+            return SuggestResult(words: [], errorMessage: reason.isEmpty ? "未啟用或未填 API Key" : reason)
         }
         let trimmed = context.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {

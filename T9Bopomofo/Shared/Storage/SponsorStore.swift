@@ -88,8 +88,9 @@ final class SponsorStore: ObservableObject {
         }
     }
 
-    func unlockForTesting(note: String = "測試解鎖：已開啟贊助內容") {
+    func unlockForTesting(note: String = "測試解鎖：已開啟贊助內容與 LLM 開關") {
         AppSettings.shared.isSponsored = true
+        AppSettings.shared.llmEnabled = true
         isSponsored = true
         statusMessage = note
     }
