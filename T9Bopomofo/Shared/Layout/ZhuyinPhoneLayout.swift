@@ -36,21 +36,22 @@ enum ZhuyinPhoneLayout {
     }
 
     /// Shared punctuation callouts for 。 long-press.
+    /// Ordered right-to-left: 逗號 at the end (right), most common first.
     static let punctuationCallouts: [Callout] = [
-        Callout(id: "，", label: "，", action: .symbol("，")),
-        Callout(id: "？", label: "？", action: .symbol("？")),
-        Callout(id: "！", label: "！", action: .symbol("！")),
-        Callout(id: "、", label: "、", action: .symbol("、")),
-        Callout(id: "…", label: "…", action: .symbol("…")),
-        Callout(id: "：", label: "：", action: .symbol("：")),
-        Callout(id: "；", label: "；", action: .symbol("；")),
-        Callout(id: "「", label: "「", action: .symbol("「")),
-        Callout(id: "」", label: "」", action: .symbol("」")),
-        Callout(id: "（", label: "（", action: .symbol("（")),
-        Callout(id: "）", label: "）", action: .symbol("）")),
-        Callout(id: "～", label: "～", action: .symbol("～")),
-        Callout(id: "@", label: "@", action: .symbol("@")),
         Callout(id: "#", label: "#", action: .symbol("#")),
+        Callout(id: "@", label: "@", action: .symbol("@")),
+        Callout(id: "～", label: "～", action: .symbol("～")),
+        Callout(id: "）", label: "）", action: .symbol("）")),
+        Callout(id: "（", label: "（", action: .symbol("（")),
+        Callout(id: "」", label: "」", action: .symbol("」")),
+        Callout(id: "「", label: "「", action: .symbol("「")),
+        Callout(id: "；", label: "；", action: .symbol("；")),
+        Callout(id: "：", label: "：", action: .symbol("：")),
+        Callout(id: "…", label: "…", action: .symbol("…")),
+        Callout(id: "、", label: "、", action: .symbol("、")),
+        Callout(id: "！", label: "！", action: .symbol("！")),
+        Callout(id: "？", label: "？", action: .symbol("？")),
+        Callout(id: "，", label: "，", action: .symbol("，")),
     ]
 
     private static let soft = Callout(id: "˙", label: "˙", action: .toneNeutral)

@@ -143,8 +143,9 @@ final class ZhuyinKeyboardView: UIView {
         let host = window ?? self
         calloutHost = host
         let callout = KeyCalloutView()
-        // Prefer centering default on a sensible pick for long punctuation lists.
-        let initial = items.count > 6 ? min(2, items.count - 1) : 0
+        // For punctuation (long lists), start at the rightmost item (逗號).
+        // For short lists (tone marks), start at first item.
+        let initial = items.count > 6 ? items.count - 1 : 0
         callout.configure(items: items, selected: initial)
         callout.setInitialIndex(initial)
         let itemW: CGFloat = 48
