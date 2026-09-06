@@ -18,8 +18,16 @@ final class KeyboardViewController: UIInputViewController {
     private weak var candidatePanel: CandidatePanelView?
     private var candidatesExpanded = false
 
+    // Cached keyboard views for reuse
+    private var zhuyinKeyboard: ZhuyinKeyboardView?
+    private var englishKeyboard: EnglishKeyboardView?
+    private var symbolKeyboard: SymbolKeyboardView?
+    private var emojiKeyboard: EmojiKeyboardView?
+
     private let collapsedHeight: CGFloat = 268
     private let expandedHeight: CGFloat = 360
+
+    private var reloadTask: DispatchWorkItem?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -101,6 +109,15 @@ final class KeyboardViewController: UIInputViewController {
         candidatePanel?.setCandidates(engine.candidates)
     }
 
+    private func reloadCandidatesDebounced(delay: TimeInterval = 0.05) {
+        reloadTask?.cancel()
+        let task = DispatchWorkItem { [weak self] in
+            self?.reloadCandidates()
+        }
+        reloadTask = task
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: task)
+    }
+
     /// After committing text, ask LLM using document tail (not only the last word).
     private func refreshPredictionsAfterCommit(inserted: String) {
         reloadCandidates()
@@ -179,73 +196,94 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func renderKeyboard() {
-        keyboardContainer.subviews.forEach { $0.removeFromSuperview() }
+        // Hide all cached keyboards first
+        zhuyinKeyboard?.isHidden = true
+        englishKeyboard?.isHidden = true
+        symbolKeyboard?.isHidden = true
+        emojiKeyboard?.isHidden = true
+
         switch mode {
         case .zhuyin:
-            let grid = ZhuyinKeyboardView()
-            grid.translatesAutoresizingMaskIntoConstraints = false
-            keyboardContainer.addSubview(grid)
-            NSLayoutConstraint.activate([
-                grid.topAnchor.constraint(equalTo: keyboardContainer.topAnchor),
-                grid.leadingAnchor.constraint(equalTo: keyboardContainer.leadingAnchor),
-                grid.trailingAnchor.constraint(equalTo: keyboardContainer.trailingAnchor),
-                grid.bottomAnchor.constraint(equalTo: keyboardContainer.bottomAnchor),
-            ])
-            grid.onAction = { [weak self] action in
-                self?.handleZhuyin(action)
+            if zhuyinKeyboard == nil {
+                let grid = ZhuyinKeyboardView()
+                grid.translatesAutoresizingMaskIntoConstraints = false
+                keyboardContainer.addSubview(grid)
+                NSLayoutConstraint.activate([
+                    grid.topAnchor.constraint(equalTo: keyboardContainer.topAnchor),
+                    grid.leadingAnchor.constraint(equalTo: keyboardContainer.leadingAnchor),
+                    grid.trailingAnchor.constraint(equalTo: keyboardContainer.trailingAnchor),
+                    grid.bottomAnchor.constraint(equalTo: keyboardContainer.bottomAnchor),
+                ])
+                grid.onAction = { [weak self] action in
+                    self?.handleZhuyin(action)
+                }
+                grid.onMode = { [weak self] in
+                    self?.mode = .english
+                    self?.collapseCandidates()
+                    self?.renderKeyboard()
+                }
+                zhuyinKeyboard = grid
             }
-            grid.onMode = { [weak self] in
-                self?.mode = .english
-                self?.collapseCandidates()
-                self?.renderKeyboard()
-            }
+            zhuyinKeyboard?.isHidden = false
         case .english:
-            let en = EnglishKeyboardView()
-            en.translatesAutoresizingMaskIntoConstraints = false
-            keyboardContainer.addSubview(en)
-            pin(en)
-            en.onInsert = { [weak self] s in
-                guard let self else { return }
-                _ = self.engine.insertPassthroughAndClear("")
-                self.textDocumentProxy.insertText(s)
-                self.reloadCandidates()
+            if englishKeyboard == nil {
+                let en = EnglishKeyboardView()
+                en.translatesAutoresizingMaskIntoConstraints = false
+                keyboardContainer.addSubview(en)
+                pin(en)
+                en.onInsert = { [weak self] s in
+                    guard let self else { return }
+                    _ = self.engine.insertPassthroughAndClear("")
+                    self.textDocumentProxy.insertText(s)
+                    self.reloadCandidates()
+                }
+                en.onBackspace = { [weak self] in self?.textDocumentProxy.deleteBackward() }
+                en.onMode = { [weak self] m in
+                    self?.mode = m
+                    self?.renderKeyboard()
+                }
+                englishKeyboard = en
             }
-            en.onBackspace = { [weak self] in self?.textDocumentProxy.deleteBackward() }
-            en.onMode = { [weak self] m in
-                self?.mode = m
-                self?.renderKeyboard()
-            }
+            englishKeyboard?.isHidden = false
         case .symbols:
-            let sym = SymbolKeyboardView()
-            sym.translatesAutoresizingMaskIntoConstraints = false
-            keyboardContainer.addSubview(sym)
-            pin(sym)
-            sym.onInsert = { [weak self] s in
-                guard let self else { return }
-                let out = self.engine.handleSymbol(s)
-                self.textDocumentProxy.insertText(out)
-                self.reloadCandidates()
+            if symbolKeyboard == nil {
+                let sym = SymbolKeyboardView()
+                sym.translatesAutoresizingMaskIntoConstraints = false
+                keyboardContainer.addSubview(sym)
+                pin(sym)
+                sym.onInsert = { [weak self] s in
+                    guard let self else { return }
+                    let out = self.engine.handleSymbol(s)
+                    self.textDocumentProxy.insertText(out)
+                    self.reloadCandidates()
+                }
+                sym.onBackspace = { [weak self] in self?.textDocumentProxy.deleteBackward() }
+                sym.onMode = { [weak self] m in
+                    self?.mode = m
+                    self?.renderKeyboard()
+                }
+                symbolKeyboard = sym
             }
-            sym.onBackspace = { [weak self] in self?.textDocumentProxy.deleteBackward() }
-            sym.onMode = { [weak self] m in
-                self?.mode = m
-                self?.renderKeyboard()
-            }
+            symbolKeyboard?.isHidden = false
         case .emoji:
-            let em = EmojiKeyboardView()
-            em.translatesAutoresizingMaskIntoConstraints = false
-            keyboardContainer.addSubview(em)
-            pin(em)
-            em.onInsert = { [weak self] s in
-                guard let self else { return }
-                _ = self.engine.insertPassthroughAndClear("")
-                self.textDocumentProxy.insertText(s)
-                self.reloadCandidates()
+            if emojiKeyboard == nil {
+                let em = EmojiKeyboardView()
+                em.translatesAutoresizingMaskIntoConstraints = false
+                keyboardContainer.addSubview(em)
+                pin(em)
+                em.onInsert = { [weak self] s in
+                    guard let self else { return }
+                    _ = self.engine.insertPassthroughAndClear("")
+                    self.textDocumentProxy.insertText(s)
+                    self.reloadCandidates()
+                }
+                em.onMode = { [weak self] m in
+                    self?.mode = m
+                    self?.renderKeyboard()
+                }
+                emojiKeyboard = em
             }
-            em.onMode = { [weak self] m in
-                self?.mode = m
-                self?.renderKeyboard()
-            }
+            emojiKeyboard?.isHidden = false
         }
     }
 
@@ -303,6 +341,7 @@ final class KeyboardViewController: UIInputViewController {
         if candidatesExpanded {
             engine.setCandidateLimit(64)
         }
-        reloadCandidates()
+        // Use debounced reload for smoother typing
+        reloadCandidatesDebounced()
     }
 }

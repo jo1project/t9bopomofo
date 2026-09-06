@@ -18,6 +18,9 @@ final class RimeEngine {
     private let distributionVersion: NSString = "0.3.9"
     private let appName: NSString = "rime.t9bopomofo"
 
+    private let queue = DispatchQueue(label: "com.jo1project.t9bopomofo.rime", qos: .userInteractive)
+    private let lock = NSLock()
+
     private init() {}
 
     private var api: UnsafeMutablePointer<RimeApi>? {
@@ -90,12 +93,16 @@ final class RimeEngine {
 
     @discardableResult
     func processKey(_ ch: Character) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
         guard isReady, let api, let scalar = ch.unicodeScalars.first else { return false }
         return api.pointee.process_key(session, Int32(scalar.value), 0) != 0
     }
 
     @discardableResult
     func processKeyCode(_ code: Int32, mask: Int32 = 0) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
         guard isReady, let api else { return false }
         return api.pointee.process_key(session, code, mask) != 0
     }
@@ -105,18 +112,24 @@ final class RimeEngine {
     }
 
     func clearComposition() {
+        lock.lock()
+        defer { lock.unlock() }
         guard isReady, let api else { return }
         api.pointee.clear_composition(session)
     }
 
     @discardableResult
     func selectCandidate(at index: Int) -> String {
+        lock.lock()
+        defer { lock.unlock() }
         guard isReady, let api else { return "" }
         _ = api.pointee.select_candidate(session, index)
         return consumeCommit()
     }
 
     func consumeCommit() -> String {
+        lock.lock()
+        defer { lock.unlock() }
         guard isReady, let api else { return "" }
         var commit = RimeCommit()
         memset(&commit, 0, MemoryLayout<RimeCommit>.size)
@@ -125,6 +138,60 @@ final class RimeEngine {
         let text = commit.text.map { String(cString: $0) } ?? ""
         _ = api.pointee.free_commit(&commit)
         return text
+    }
+
+    // MARK: - Async operations for background processing
+
+    func processKeyAsync(_ ch: Character) async -> Bool {
+        await withCheckedContinuation { continuation in
+            queue.async { [weak self] in
+                let result = self?.processKey(ch) ?? false
+                continuation.resume(returning: result)
+            }
+        }
+    }
+
+    func backspaceAsync() async {
+        await withCheckedContinuation { continuation in
+            queue.async { [weak self] in
+                self?.backspace()
+                continuation.resume()
+            }
+        }
+    }
+
+    func clearCompositionAsync() async {
+        await withCheckedContinuation { continuation in
+            queue.async { [weak self] in
+                self?.clearComposition()
+                continuation.resume()
+            }
+        }
+    }
+
+    func selectCandidateAsync(at index: Int) async -> String {
+        await withCheckedContinuation { continuation in
+            queue.async { [weak self] in
+                let result = self?.selectCandidate(at: index) ?? ""
+                continuation.resume(returning: result)
+            }
+        }
+    }
+
+    func getContextAsync() async -> (input: String, preedit: String, isComposing: Bool, candidates: [(text: String, comment: String)]) {
+        await withCheckedContinuation { continuation in
+            queue.async { [weak self] in
+                guard let self = self else {
+                    continuation.resume(returning: ("", "", false, []))
+                    return
+                }
+                let input = self.input
+                let preedit = self.preedit
+                let composing = self.isComposing
+                let cands = self.candidates(limit: 12)
+                continuation.resume(returning: (input, preedit, composing, cands))
+            }
+        }
     }
 
     // MARK: - Context

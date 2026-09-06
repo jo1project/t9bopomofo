@@ -20,6 +20,7 @@ final class InputEngine: ObservableObject {
     private var candidateLimit = 12
     private var llmTask: Task<Void, Never>?
     private var lastPredictionContext: String = ""
+    private var updateTask: Task<Void, Never>?
 
     /// Fired on main when candidates change (e.g. async LLM).
     var onCandidatesChanged: (() -> Void)?
@@ -31,7 +32,10 @@ final class InputEngine: ObservableObject {
     func setCandidateLimit(_ limit: Int) {
         candidateLimit = max(8, limit)
         if usingRime {
-            syncFromRime()
+            updateTask?.cancel()
+            updateTask = Task { [weak self] in
+                await self?.syncFromRimeAsync()
+            }
         } else {
             refreshSwiftCandidates()
         }
@@ -88,8 +92,12 @@ final class InputEngine: ObservableObject {
 
     func tapT9Key(_ key: Character) {
         if usingRime {
-            _ = rime.processKey(key)
-            syncFromRime()
+            updateTask?.cancel()
+            updateTask = Task { [weak self] in
+                _ = await self?.rime.processKeyAsync(key)
+                guard !Task.isCancelled else { return }
+                await self?.syncFromRimeAsync()
+            }
             return
         }
         composingDigits.append(key)
@@ -98,8 +106,12 @@ final class InputEngine: ObservableObject {
 
     func tapTone(_ tone: Character) {
         if usingRime {
-            _ = rime.processKey(tone)
-            syncFromRime()
+            updateTask?.cancel()
+            updateTask = Task { [weak self] in
+                _ = await self?.rime.processKeyAsync(tone)
+                guard !Task.isCancelled else { return }
+                await self?.syncFromRimeAsync()
+            }
             return
         }
         if composingTones.count >= syllableEstimate(for: composingDigits), !composingTones.isEmpty {
@@ -111,9 +123,13 @@ final class InputEngine: ObservableObject {
 
     func tapExactToken(_ token: Character) {
         if usingRime {
-            // Send schema letter (b/g/Z/…) directly — finer than T9 digit.
-            _ = rime.processKey(token)
-            syncFromRime()
+            updateTask?.cancel()
+            updateTask = Task { [weak self] in
+                // Send schema letter (b/g/Z/…) directly — finer than T9 digit.
+                _ = await self?.rime.processKeyAsync(token)
+                guard !Task.isCancelled else { return }
+                await self?.syncFromRimeAsync()
+            }
             return
         }
         if let key = T9KeyMap.tokenToKey[token] {
@@ -124,8 +140,12 @@ final class InputEngine: ObservableObject {
 
     func backspace() {
         if usingRime {
-            rime.backspace()
-            syncFromRime()
+            updateTask?.cancel()
+            updateTask = Task { [weak self] in
+                await self?.rime.backspaceAsync()
+                guard !Task.isCancelled else { return }
+                await self?.syncFromRimeAsync()
+            }
             return
         }
         if !composingTones.isEmpty {
@@ -138,8 +158,12 @@ final class InputEngine: ObservableObject {
 
     func clearComposing() {
         if usingRime {
-            rime.clearComposition()
-            syncFromRime()
+            updateTask?.cancel()
+            updateTask = Task { [weak self] in
+                await self?.rime.clearCompositionAsync()
+                guard !Task.isCancelled else { return }
+                await self?.syncFromRimeAsync()
+            }
             return
         }
         composingDigits = ""
@@ -163,16 +187,23 @@ final class InputEngine: ObservableObject {
                 }
                 return candidates.firstIndex(where: { $0.id == candidate.id }) ?? 0
             }()
+
+            // Synchronous for immediate text insertion
             let text = rime.selectCandidate(at: idx)
             if !text.isEmpty {
                 userLexicon.recordCommit(text, previous: lastCommitted.isEmpty ? nil : lastCommitted)
                 lastCommitted = text
             }
-            syncFromRime()
-            if !text.isEmpty, !isComposing {
-                lastPredictionContext = text
-                applyLocalPredictions(after: text)
-                // LLM is scheduled by KeyboardViewController with hasFullAccess + document context.
+
+            // Update candidates asynchronously
+            updateTask?.cancel()
+            updateTask = Task { [weak self] in
+                await self?.syncFromRimeAsync()
+                guard let self = self, !Task.isCancelled else { return }
+                if !text.isEmpty, !self.isComposing {
+                    self.lastPredictionContext = text
+                    self.applyLocalPredictions(after: text)
+                }
             }
             return text
         }
@@ -283,6 +314,65 @@ final class InputEngine: ObservableObject {
     func handleSymbol(_ symbol: String) -> String { insertPassthroughAndClear(symbol) }
 
     // MARK: - Rime sync
+
+    private func syncFromRimeAsync() async {
+        let context = await rime.getContextAsync()
+
+        await MainActor.run { [weak self] in
+            guard let self = self else { return }
+
+            let input = context.input
+            self.composingDigits = input
+            self.composingTones = String(input.filter { T9KeyMap.toneKeys.contains($0) })
+
+            let pre = context.preedit
+            if !pre.isEmpty {
+                self.preeditDisplay = pre
+            } else if input.isEmpty {
+                self.preeditDisplay = ""
+            } else {
+                self.preeditDisplay = input.map { T9KeyMap.keyLabels[$0] ?? String($0) }.joined(separator: "·")
+            }
+
+            let raw = context.candidates
+            if raw.isEmpty, !self.lastCommitted.isEmpty, input.isEmpty {
+                let preds = self.userLexicon.predictions(after: self.lastCommitted)
+                self.candidates = preds.enumerated().map { idx, w in
+                    Candidate(id: "pred-\(idx)-\(w)", text: w, reading: "", score: 1000 - Double(idx), source: .prediction)
+                }
+            } else {
+                var merged = raw.enumerated().map { idx, item in
+                    Candidate(
+                        id: "rime-\(idx)",
+                        text: item.text,
+                        reading: item.comment,
+                        score: Double(1000 - idx),
+                        source: .exact
+                    )
+                }
+                if AppSettings.shared.fuzzyNeighborEffective, self.loaded {
+                    let digits = String(input.filter { T9KeyMap.keyLabels[$0] != nil })
+                    if digits.count >= 2 {
+                        var seen = Set(merged.map(\.text))
+                        for m in FuzzyMatcher.fuzzy(digits: digits, lexicon: self.lexicon, maxDistance: 1, limit: 8) {
+                            guard !seen.contains(m.entry.word) else { continue }
+                            seen.insert(m.entry.word)
+                            merged.append(Candidate(
+                                id: "fz-rime-\(m.entry.word)-\(m.entry.reading)",
+                                text: m.entry.word,
+                                reading: m.entry.reading,
+                                score: Double(m.entry.weight) * 0.35 - Double(m.distance) * 300,
+                                source: m.kind
+                            ))
+                        }
+                    }
+                }
+                self.candidates = Array(merged.prefix(self.candidateLimit))
+            }
+
+            self.onCandidatesChanged?()
+        }
+    }
 
     private func syncFromRime() {
         let input = rime.input
