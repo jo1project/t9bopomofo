@@ -11,7 +11,8 @@ final class KeyCalloutView: UIView {
     /// Finger X when long-press began (window coords). Selection uses delta from this.
     private var originWindowX: CGFloat?
     /// Pixels of horizontal travel per option step.
-    private let pixelsPerStep: CGFloat = 26
+    /// Reduced from 26 to 18 to allow reaching more options (e.g. punctuation callouts).
+    private let pixelsPerStep: CGFloat = 18
 
     var onSelectionChanged: ((Int) -> Void)?
 
