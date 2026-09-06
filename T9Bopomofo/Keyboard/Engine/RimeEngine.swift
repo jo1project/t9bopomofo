@@ -128,8 +128,7 @@ final class RimeEngine {
     }
 
     func consumeCommit() -> String {
-        lock.lock()
-        defer { lock.unlock() }
+        // NOTE: caller must hold lock
         guard isReady, let api else { return "" }
         var commit = RimeCommit()
         memset(&commit, 0, MemoryLayout<RimeCommit>.size)
@@ -185,23 +184,55 @@ final class RimeEngine {
                     continuation.resume(returning: ("", "", false, []))
                     return
                 }
-                let input = self.input
-                let preedit = self.preedit
-                let composing = self.isComposing
-                let cands = self.candidates(limit: 12)
+
+                self.lock.lock()
+                defer { self.lock.unlock() }
+
+                // Read all context while holding lock
+                let input = self.inputLocked()
+                let preedit = self.preeditLocked()
+                let composing = self.isComposingLocked()
+                let cands = self.candidatesLocked(limit: 12)
+
                 continuation.resume(returning: (input, preedit, composing, cands))
             }
         }
     }
 
-    // MARK: - Context
+    // MARK: - Context (lock-free accessors for sync calls)
 
     var input: String {
+        lock.lock()
+        defer { lock.unlock() }
+        return inputLocked()
+    }
+
+    var isComposing: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return isComposingLocked()
+    }
+
+    var preedit: String {
+        lock.lock()
+        defer { lock.unlock() }
+        return preeditLocked()
+    }
+
+    func candidates(limit: Int = 12) -> [(text: String, comment: String)] {
+        lock.lock()
+        defer { lock.unlock() }
+        return candidatesLocked(limit: limit)
+    }
+
+    // MARK: - Internal locked implementations
+
+    private func inputLocked() -> String {
         guard isReady, let api, let c = api.pointee.get_input(session) else { return "" }
         return String(cString: c)
     }
 
-    var isComposing: Bool {
+    private func isComposingLocked() -> Bool {
         guard isReady, let api else { return false }
         var status = RimeStatus()
         memset(&status, 0, MemoryLayout<RimeStatus>.size)
@@ -211,7 +242,7 @@ final class RimeEngine {
         return status.is_composing != 0
     }
 
-    var preedit: String {
+    private func preeditLocked() -> String {
         guard isReady, let api else { return "" }
         var ctx = RimeContext()
         memset(&ctx, 0, MemoryLayout<RimeContext>.size)
@@ -222,7 +253,7 @@ final class RimeEngine {
         return String(cString: p)
     }
 
-    func candidates(limit: Int = 12) -> [(text: String, comment: String)] {
+    private func candidatesLocked(limit: Int) -> [(text: String, comment: String)] {
         guard isReady, let api else { return [] }
         var iterator = RimeCandidateListIterator()
         memset(&iterator, 0, MemoryLayout<RimeCandidateListIterator>.size)
