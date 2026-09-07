@@ -74,28 +74,6 @@ jobs:
           echo "  Main:     $MAIN_NAME ($MAIN_UUID)"
           echo "  Keyboard: $KEYBOARD_NAME ($KEYBOARD_UUID)"
 
-      - name: Increment build number
-        env:
-          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
-          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-        run: |
-          # Get latest build number from TestFlight
-          LATEST=$(xcrun altool --list-apps \
-            --apiKey "$API_KEY_ID" \
-            --apiIssuer "$ISSUER_ID" 2>/dev/null | grep "com.jo1project.t9bopomofo" | head -1 | awk '{print $NF}' || echo "0")
-
-          NEW=$((LATEST + 1))
-          echo "Build number: $NEW"
-
-          # Update Info.plist files
-          plutil -replace CFBundleVersion -string "$NEW" T9Bopomofo/App/Info.plist
-          plutil -replace CFBundleShortVersionString -string "0.3.9" T9Bopomofo/App/Info.plist
-
-          plutil -replace CFBundleVersion -string "$NEW" T9Bopomofo/Keyboard/Info.plist
-          plutil -replace CFBundleShortVersionString -string "0.3.9" T9Bopomofo/Keyboard/Info.plist
-
-          echo "Updated to version 0.3.9 ($NEW)"
-
       - name: Update project with profile UUIDs
         run: |
           # Update PROVISIONING_PROFILE_SPECIFIER for both targets
@@ -114,6 +92,28 @@ jobs:
           xcodegen generate
 
           echo "✓ Profile UUIDs set: Main=$MAIN_PROFILE_UUID, Keyboard=$KEYBOARD_PROFILE_UUID"
+
+      - name: Increment build number
+        env:
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          # Get latest build number from TestFlight
+          LATEST=$(xcrun altool --list-apps \
+            --apiKey "$API_KEY_ID" \
+            --apiIssuer "$ISSUER_ID" 2>/dev/null | grep "com.jo1project.t9bopomofo" | head -1 | awk '{print $NF}' || echo "0")
+
+          NEW=$((LATEST + 1))
+          echo "Build number: $NEW"
+
+          # Update Info.plist files after project generation
+          plutil -replace CFBundleVersion -string "$NEW" T9Bopomofo/App/Info.plist
+          plutil -replace CFBundleShortVersionString -string "0.3.9" T9Bopomofo/App/Info.plist
+
+          plutil -replace CFBundleVersion -string "$NEW" T9Bopomofo/Keyboard/Info.plist
+          plutil -replace CFBundleShortVersionString -string "0.3.9" T9Bopomofo/Keyboard/Info.plist
+
+          echo "✓ Version 0.3.9 ($NEW)"
 
       - name: Build and Archive
         run: |
