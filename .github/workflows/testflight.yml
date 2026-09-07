@@ -23,18 +23,40 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
-      - name: Set up App Store Connect API
+      - name: Import signing certificate and provisioning profiles
         env:
           API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           API_KEY_CONTENT: ${{ secrets.APP_STORE_CONNECT_API_KEY_CONTENT }}
+          PROVISIONING_PROFILE_BASE64: ${{ secrets.PROVISIONING_PROFILE_BASE64 }}
+          PROVISIONING_PROFILE_KEYBOARD_BASE64: ${{ secrets.PROVISIONING_PROFILE_KEYBOARD_BASE64 }}
         run: |
+          # Set up API key
           mkdir -p ~/private_keys
           echo "$API_KEY_CONTENT" > ~/private_keys/AuthKey_${API_KEY_ID}.p8
 
-          echo "✓ API Key configured"
-          echo "  Key ID: $API_KEY_ID"
-          echo "  Issuer ID: $ISSUER_ID"
+          # Decode and install provisioning profiles
+          PROFILE_PATH="$RUNNER_TEMP/main.mobileprovision"
+          KEYBOARD_PROFILE_PATH="$RUNNER_TEMP/keyboard.mobileprovision"
+
+          echo "$PROVISIONING_PROFILE_BASE64" | base64 --decode > "$PROFILE_PATH"
+          echo "$PROVISIONING_PROFILE_KEYBOARD_BASE64" | base64 --decode > "$KEYBOARD_PROFILE_PATH"
+
+          # Install profiles
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp "$PROFILE_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/
+          cp "$KEYBOARD_PROFILE_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/
+
+          # Get profile UUIDs
+          MAIN_UUID=$(security cms -D -i "$PROFILE_PATH" | plutil -extract UUID raw -)
+          KEYBOARD_UUID=$(security cms -D -i "$KEYBOARD_PROFILE_PATH" | plutil -extract UUID raw -)
+
+          echo "MAIN_PROFILE_UUID=$MAIN_UUID" >> $GITHUB_ENV
+          echo "KEYBOARD_PROFILE_UUID=$KEYBOARD_UUID" >> $GITHUB_ENV
+
+          echo "✓ Profiles installed"
+          echo "  Main UUID: $MAIN_UUID"
+          echo "  Keyboard UUID: $KEYBOARD_UUID"
 
       - name: Increment build number
         env:
@@ -59,26 +81,18 @@ jobs:
           echo "Updated to version 0.3.9 ($NEW)"
 
       - name: Build and Archive
-        env:
-          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
-          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
         run: |
           xcodebuild archive \
             -project T9Bopomofo.xcodeproj \
             -scheme T9Bopomofo \
             -configuration Release \
             -archivePath $RUNNER_TEMP/T9Bopomofo.xcarchive \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath ~/private_keys/AuthKey_${API_KEY_ID}.p8 \
-            -authenticationKeyID "$API_KEY_ID" \
-            -authenticationKeyIssuerID "$ISSUER_ID" \
-            CODE_SIGN_STYLE=Automatic \
-            DEVELOPMENT_TEAM=S24Z424MU4
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM=S24Z424MU4 \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
+            PROVISIONING_PROFILE_SPECIFIER="$MAIN_PROFILE_UUID"
 
       - name: Export IPA
-        env:
-          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
-          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
         run: |
           cat > $RUNNER_TEMP/ExportOptions.plist <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
@@ -91,6 +105,15 @@ jobs:
               <string>S24Z424MU4</string>
               <key>uploadSymbols</key>
               <true/>
+              <key>signingStyle</key>
+              <string>manual</string>
+              <key>provisioningProfiles</key>
+              <dict>
+                  <key>com.jo1project.t9bopomofo</key>
+                  <string>$MAIN_PROFILE_UUID</string>
+                  <key>com.jo1project.t9bopomofo.keyboard</key>
+                  <string>$KEYBOARD_PROFILE_UUID</string>
+              </dict>
           </dict>
           </plist>
           EOF
@@ -98,11 +121,7 @@ jobs:
           xcodebuild -exportArchive \
             -archivePath $RUNNER_TEMP/T9Bopomofo.xcarchive \
             -exportPath $RUNNER_TEMP/export \
-            -exportOptionsPlist $RUNNER_TEMP/ExportOptions.plist \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath ~/private_keys/AuthKey_${API_KEY_ID}.p8 \
-            -authenticationKeyID "$API_KEY_ID" \
-            -authenticationKeyIssuerID "$ISSUER_ID"
+            -exportOptionsPlist $RUNNER_TEMP/ExportOptions.plist
 
       - name: Upload to TestFlight
         env:
