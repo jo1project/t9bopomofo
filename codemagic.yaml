@@ -36,35 +36,10 @@ workflows:
         script: |
           xcodegen generate
           ls -la "$XCODE_PROJECT"
-      - name: Set up App Store Connect authentication
+      - name: Set up code signing
         script: |
-          # Debug: List all available App Store Connect related env vars
-          echo "=== Available environment variables ==="
-          env | grep -i "app_store\|connect\|issuer\|key" || echo "No matching vars found"
-
-          # Prepare API key for xcodebuild automatic signing
-          mkdir -p ~/private_keys
-
-          # Try different possible variable names
-          if [ -n "$APP_STORE_CONNECT_PRIVATE_KEY" ]; then
-            echo "Using APP_STORE_CONNECT_PRIVATE_KEY"
-            echo "$APP_STORE_CONNECT_PRIVATE_KEY" > ~/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8
-          elif [ -n "$CM_APP_STORE_CONNECT_PRIVATE_KEY" ]; then
-            echo "Using CM_APP_STORE_CONNECT_PRIVATE_KEY"
-            echo "$CM_APP_STORE_CONNECT_PRIVATE_KEY" > ~/private_keys/AuthKey_${CM_APP_STORE_CONNECT_KEY_ID}.p8
-          else
-            echo "ERROR: No App Store Connect private key found in environment"
-            exit 1
-          fi
-
-          # Verify the file was created and has content
-          ls -lh ~/private_keys/
-          echo "=== First line of p8 file ==="
-          head -1 ~/private_keys/AuthKey_*.p8
-
-          echo "✓ API Key ID: ${APP_STORE_CONNECT_KEY_IDENTIFIER:-${CM_APP_STORE_CONNECT_KEY_ID}}"
-          echo "✓ Issuer ID: ${APP_STORE_CONNECT_ISSUER_ID:-${CM_APP_STORE_CONNECT_ISSUER_ID}}"
-          echo "✓ Team ID: S24Z424MU4"
+          # Use Codemagic's automatic code signing via integration
+          xcode-project use-profiles
       - name: Incremental build number (optional)
         script: |
           LATEST=$(app-store-connect get-latest-testflight-build-number "$BUNDLE_ID" || echo "0")
@@ -87,52 +62,20 @@ workflows:
 
           echo "App version: 0.3.9 ($NEW)"
           echo "Keyboard version: 0.3.9 ($NEW)"
-      - name: Archive with automatic signing
+      - name: Build with Codemagic
         script: |
-          xcodebuild archive \
-            -project "$XCODE_PROJECT" \
-            -scheme "$XCODE_SCHEME" \
-            -configuration Release \
-            -archivePath build/ios/xcarchive/T9Bopomofo.xcarchive \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath ~/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8 \
-            -authenticationKeyID "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
-            -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID" \
-            CODE_SIGN_STYLE=Automatic \
-            DEVELOPMENT_TEAM=S24Z424MU4
-      - name: Export IPA
-        script: |
-          # Create export options
-          cat > /tmp/ExportOptions.plist <<'PLIST'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>method</key>
-              <string>app-store</string>
-              <key>teamID</key>
-              <string>S24Z424MU4</string>
-              <key>uploadSymbols</key>
-              <true/>
-          </dict>
-          </plist>
-          PLIST
-
-          xcodebuild -exportArchive \
-            -archivePath build/ios/xcarchive/T9Bopomofo.xcarchive \
-            -exportPath build/ios/ipa \
-            -exportOptionsPlist /tmp/ExportOptions.plist \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath ~/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8 \
-            -authenticationKeyID "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
-            -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID"
+          # Let Codemagic handle signing automatically via integration
+          # Use xcode-project which integrates with Codemagic's signing
+          xcode-project build-ipa \
+            --project "$XCODE_PROJECT" \
+            --scheme "$XCODE_SCHEME"
     artifacts:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
     publishing:
       app_store_connect:
+        # Use integration for automatic signing and TestFlight upload
         auth: integration
         submit_to_testflight: true
-        # Internal testing only until screenshots/metadata ready
         submit_to_app_store: false
