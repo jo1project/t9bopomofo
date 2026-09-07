@@ -177,6 +177,7 @@ final class EnglishKeyboardView: UIView {
         if addTap, let action {
             b.addAction(UIAction { _ in
                 KeyboardHaptics.keyTap()
+                KeyboardSounds.keyTap()
                 action()
             }, for: .touchUpInside)
         }
@@ -189,6 +190,7 @@ final class EnglishKeyboardView: UIView {
         }
         let box = TimerBox()
         button.addAction(UIAction { _ in
+            KeyboardSounds.delete()
             handler()
             box.timer?.invalidate()
             let delay = Timer(timeInterval: 0.4, repeats: false) { _ in
@@ -270,6 +272,7 @@ final class SymbolKeyboardView: UIView {
         b.layer.cornerRadius = 6
         b.addAction(UIAction { _ in
             KeyboardHaptics.keyTap()
+            KeyboardSounds.keyTap()
             action()
         }, for: .touchUpInside)
         return b

@@ -77,6 +77,7 @@ struct SetupView: View {
 struct KeyboardSettingsView: View {
     @State private var fuzzyOn = AppSettings.shared.fuzzyNeighborEnabled
     @State private var hapticsOn = AppSettings.shared.hapticsEnabled
+    @State private var soundsOn = AppSettings.shared.soundsEnabled
     @State private var sponsored = AppSettings.shared.isSponsored
 
     var body: some View {
@@ -103,6 +104,10 @@ struct KeyboardSettingsView: View {
                 }
 
                 Section("回饋") {
+                    Toggle("按鍵音效", isOn: $soundsOn)
+                        .onChange(of: soundsOn) { _, v in
+                            AppSettings.shared.soundsEnabled = v
+                        }
                     Toggle("按鍵觸覺回饋", isOn: $hapticsOn)
                         .onChange(of: hapticsOn) { _, v in
                             AppSettings.shared.hapticsEnabled = v
@@ -121,6 +126,7 @@ struct KeyboardSettingsView: View {
                 sponsored = AppSettings.shared.isSponsored
                 fuzzyOn = AppSettings.shared.fuzzyNeighborEnabled
                 hapticsOn = AppSettings.shared.hapticsEnabled
+                soundsOn = AppSettings.shared.soundsEnabled
             }
         }
     }

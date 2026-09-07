@@ -169,6 +169,7 @@ final class ZhuyinKeyboardView: UIView {
     private func commitCallout() {
         if let action = activeCallout?.selectedAction {
             KeyboardHaptics.commit()
+            KeyboardSounds.commit()
             onAction?(action)
         }
         dismissCallout()
@@ -288,6 +289,7 @@ final class KeyButton: UIButton {
         // Backspace uses touchDown repeat path instead.
         guard repeatHandler == nil else { return }
         KeyboardHaptics.keyTap()
+        KeyboardSounds.keyTap()
         onTap?(keyAction)
     }
 
@@ -322,6 +324,7 @@ final class KeyButton: UIButton {
 
     @objc private func touchDownRepeat() {
         guard let handler = repeatHandler else { return }
+        KeyboardSounds.delete()
         handler()
         repeatTimer?.invalidate()
         let delay = Timer(timeInterval: 0.4, repeats: false) { [weak self] _ in

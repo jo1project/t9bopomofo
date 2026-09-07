@@ -1,4 +1,5 @@
 import UIKit
+import AudioToolbox
 
 enum KeyboardHaptics {
     private static let light = UIImpactFeedbackGenerator(style: .light)
@@ -18,6 +19,23 @@ enum KeyboardHaptics {
     static func commit() {
         guard AppSettings.shared.hapticsEnabled else { return }
         medium.impactOccurred(intensity: 0.85)
+    }
+}
+
+enum KeyboardSounds {
+    static func keyTap() {
+        guard AppSettings.shared.soundsEnabled else { return }
+        AudioServicesPlaySystemSound(1104)
+    }
+
+    static func delete() {
+        guard AppSettings.shared.soundsEnabled else { return }
+        AudioServicesPlaySystemSound(1155)
+    }
+
+    static func commit() {
+        guard AppSettings.shared.soundsEnabled else { return }
+        AudioServicesPlaySystemSound(1104)
     }
 }
 

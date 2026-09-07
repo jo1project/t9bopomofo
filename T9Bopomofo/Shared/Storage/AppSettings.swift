@@ -21,6 +21,7 @@ final class AppSettings: @unchecked Sendable {
         static let isSponsored = "settings_is_sponsored_v1"
         static let fuzzyNeighborEnabled = "settings_fuzzy_neighbor_v1"
         static let hapticsEnabled = "settings_haptics_v1"
+        static let soundsEnabled = "settings_sounds_v1"
     }
 
     private struct FilePayload: Codable {
@@ -32,10 +33,11 @@ final class AppSettings: @unchecked Sendable {
         var isSponsored: Bool
         var fuzzyNeighborEnabled: Bool
         var hapticsEnabled: Bool
+        var soundsEnabled: Bool
 
         enum CodingKeys: String, CodingKey {
             case llmEnabled, llmBaseURL, llmAPIKey, llmModel, iCloudAutoBackup
-            case isSponsored, fuzzyNeighborEnabled, hapticsEnabled
+            case isSponsored, fuzzyNeighborEnabled, hapticsEnabled, soundsEnabled
         }
 
         init(
@@ -46,7 +48,8 @@ final class AppSettings: @unchecked Sendable {
             iCloudAutoBackup: Bool,
             isSponsored: Bool,
             fuzzyNeighborEnabled: Bool,
-            hapticsEnabled: Bool
+            hapticsEnabled: Bool,
+            soundsEnabled: Bool
         ) {
             self.llmEnabled = llmEnabled
             self.llmBaseURL = llmBaseURL
@@ -56,6 +59,7 @@ final class AppSettings: @unchecked Sendable {
             self.isSponsored = isSponsored
             self.fuzzyNeighborEnabled = fuzzyNeighborEnabled
             self.hapticsEnabled = hapticsEnabled
+            self.soundsEnabled = soundsEnabled
         }
 
         init(from decoder: Decoder) throws {
@@ -66,9 +70,9 @@ final class AppSettings: @unchecked Sendable {
             llmModel = try c.decodeIfPresent(String.self, forKey: .llmModel) ?? ""
             iCloudAutoBackup = try c.decodeIfPresent(Bool.self, forKey: .iCloudAutoBackup) ?? false
             isSponsored = try c.decodeIfPresent(Bool.self, forKey: .isSponsored) ?? false
-            // Default ON for fuzzy.
             fuzzyNeighborEnabled = try c.decodeIfPresent(Bool.self, forKey: .fuzzyNeighborEnabled) ?? true
             hapticsEnabled = try c.decodeIfPresent(Bool.self, forKey: .hapticsEnabled) ?? true
+            soundsEnabled = try c.decodeIfPresent(Bool.self, forKey: .soundsEnabled) ?? true
         }
     }
 
@@ -86,6 +90,9 @@ final class AppSettings: @unchecked Sendable {
         }
         if defaults.object(forKey: Key.hapticsEnabled) == nil {
             defaults.set(true, forKey: Key.hapticsEnabled)
+        }
+        if defaults.object(forKey: Key.soundsEnabled) == nil {
+            defaults.set(true, forKey: Key.soundsEnabled)
         }
     }
 
@@ -202,6 +209,16 @@ final class AppSettings: @unchecked Sendable {
         set { update { $0.hapticsEnabled = newValue } }
     }
 
+    var soundsEnabled: Bool {
+        get {
+            reloadFromDiskIfNeeded()
+            if let fileCache { return fileCache.soundsEnabled }
+            if defaults.object(forKey: Key.soundsEnabled) == nil { return true }
+            return defaults.bool(forKey: Key.soundsEnabled)
+        }
+        set { update { $0.soundsEnabled = newValue } }
+    }
+
     /// Effective fuzzy: always true unless sponsored AND user turned it off.
     var fuzzyNeighborEffective: Bool {
         if !isSponsored { return true }
@@ -258,6 +275,7 @@ final class AppSettings: @unchecked Sendable {
             defaults.set(payload.isSponsored, forKey: Key.isSponsored)
             defaults.set(payload.fuzzyNeighborEnabled, forKey: Key.fuzzyNeighborEnabled)
             defaults.set(payload.hapticsEnabled, forKey: Key.hapticsEnabled)
+            defaults.set(payload.soundsEnabled, forKey: Key.soundsEnabled)
             // Migrate key from file into Keychain once.
             if payload.llmAPIKey != "•keychain•", !payload.llmAPIKey.isEmpty,
                KeychainStore.get(account: apiKeyAccount) == nil {
@@ -294,7 +312,9 @@ final class AppSettings: @unchecked Sendable {
             fuzzyNeighborEnabled: defaults.object(forKey: Key.fuzzyNeighborEnabled) == nil
                 ? true : defaults.bool(forKey: Key.fuzzyNeighborEnabled),
             hapticsEnabled: defaults.object(forKey: Key.hapticsEnabled) == nil
-                ? true : defaults.bool(forKey: Key.hapticsEnabled)
+                ? true : defaults.bool(forKey: Key.hapticsEnabled),
+            soundsEnabled: defaults.object(forKey: Key.soundsEnabled) == nil
+                ? true : defaults.bool(forKey: Key.soundsEnabled)
         )
     }
 
@@ -310,6 +330,7 @@ final class AppSettings: @unchecked Sendable {
         defaults.set(payload.isSponsored, forKey: Key.isSponsored)
         defaults.set(payload.fuzzyNeighborEnabled, forKey: Key.fuzzyNeighborEnabled)
         defaults.set(payload.hapticsEnabled, forKey: Key.hapticsEnabled)
+        defaults.set(payload.soundsEnabled, forKey: Key.soundsEnabled)
         defaults.synchronize()
         writeFileUnlocked(payload)
         lock.unlock()

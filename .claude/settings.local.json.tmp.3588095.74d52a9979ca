@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xcodebuild -project T9Bopomofo.xcodeproj -scheme T9Bopomofo -sdk iphoneos -configuration Release CODE_SIGNING_ALLOWED=NO)",
+      "Bash(git add *)"
+    ]
+  }
+}
