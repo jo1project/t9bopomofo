@@ -1,0 +1,122 @@
+name: Build and Upload to TestFlight
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Download librime + models
+        run: |
+          chmod +x Scripts/download-frameworks.sh Scripts/download-models.sh
+          ./Scripts/download-frameworks.sh
+          ./Scripts/download-models.sh
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Set up App Store Connect API
+        env:
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          API_KEY_CONTENT: ${{ secrets.APP_STORE_CONNECT_API_KEY_CONTENT }}
+        run: |
+          mkdir -p ~/private_keys
+          echo "$API_KEY_CONTENT" > ~/private_keys/AuthKey_${API_KEY_ID}.p8
+
+          echo "✓ API Key configured"
+          echo "  Key ID: $API_KEY_ID"
+          echo "  Issuer ID: $ISSUER_ID"
+
+      - name: Increment build number
+        env:
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          # Get latest build number from TestFlight
+          LATEST=$(xcrun altool --list-apps \
+            --apiKey "$API_KEY_ID" \
+            --apiIssuer "$ISSUER_ID" 2>/dev/null | grep "com.jo1project.t9bopomofo" | head -1 | awk '{print $NF}' || echo "0")
+
+          NEW=$((LATEST + 1))
+          echo "Build number: $NEW"
+
+          # Update Info.plist files
+          plutil -replace CFBundleVersion -string "$NEW" T9Bopomofo/App/Info.plist
+          plutil -replace CFBundleShortVersionString -string "0.3.9" T9Bopomofo/App/Info.plist
+
+          plutil -replace CFBundleVersion -string "$NEW" T9Bopomofo/Keyboard/Info.plist
+          plutil -replace CFBundleShortVersionString -string "0.3.9" T9Bopomofo/Keyboard/Info.plist
+
+          echo "Updated to version 0.3.9 ($NEW)"
+
+      - name: Build and Archive
+        env:
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          xcodebuild archive \
+            -project T9Bopomofo.xcodeproj \
+            -scheme T9Bopomofo \
+            -configuration Release \
+            -archivePath $RUNNER_TEMP/T9Bopomofo.xcarchive \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/private_keys/AuthKey_${API_KEY_ID}.p8 \
+            -authenticationKeyID "$API_KEY_ID" \
+            -authenticationKeyIssuerID "$ISSUER_ID" \
+            CODE_SIGN_STYLE=Automatic \
+            DEVELOPMENT_TEAM=S24Z424MU4
+
+      - name: Export IPA
+        env:
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          cat > $RUNNER_TEMP/ExportOptions.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>app-store</string>
+              <key>teamID</key>
+              <string>S24Z424MU4</string>
+              <key>uploadSymbols</key>
+              <true/>
+          </dict>
+          </plist>
+          EOF
+
+          xcodebuild -exportArchive \
+            -archivePath $RUNNER_TEMP/T9Bopomofo.xcarchive \
+            -exportPath $RUNNER_TEMP/export \
+            -exportOptionsPlist $RUNNER_TEMP/ExportOptions.plist \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/private_keys/AuthKey_${API_KEY_ID}.p8 \
+            -authenticationKeyID "$API_KEY_ID" \
+            -authenticationKeyIssuerID "$ISSUER_ID"
+
+      - name: Upload to TestFlight
+        env:
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          xcrun altool --upload-app \
+            --type ios \
+            --file "$RUNNER_TEMP/export/T9Bopomofo.ipa" \
+            --apiKey "$API_KEY_ID" \
+            --apiIssuer "$ISSUER_ID"
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: T9Bopomofo-ipa
+          path: ${{ runner.temp }}/export/*.ipa
