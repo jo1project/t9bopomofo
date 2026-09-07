@@ -46,18 +46,29 @@ workflows:
           LATEST=$(app-store-connect get-latest-testflight-build-number "$BUNDLE_ID" || echo "0")
           NEW=$((LATEST + 1))
           echo "CFBundleVersion -> $NEW"
+
+          # Update App Info.plist
           plutil -replace CFBundleVersion -string "$NEW" T9Bopomofo/App/Info.plist
-          # Keyboard Info.plist may use generated keys; bump if present
+          plutil -replace CFBundleShortVersionString -string "0.3.9" T9Bopomofo/App/Info.plist
+
+          # Update Keyboard Info.plist - ensure version matches
           if [ -f T9Bopomofo/Keyboard/Info.plist ]; then
             /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $NEW" T9Bopomofo/Keyboard/Info.plist \
               || /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $NEW" T9Bopomofo/Keyboard/Info.plist \
               || true
+            /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString 0.3.9" T9Bopomofo/Keyboard/Info.plist \
+              || /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string 0.3.9" T9Bopomofo/Keyboard/Info.plist \
+              || true
           fi
+
+          echo "App version: 0.3.9 ($NEW)"
+          echo "Keyboard version: 0.3.9 ($NEW)"
       - name: Build ipa
         script: |
           xcode-project build-ipa \
             --project "$XCODE_PROJECT" \
-            --scheme "$XCODE_SCHEME"
+            --scheme "$XCODE_SCHEME" \
+            --config "Release"
     artifacts:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log

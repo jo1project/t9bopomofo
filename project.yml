@@ -17,6 +17,8 @@ settings:
     DEVELOPMENT_TEAM: S24Z424MU4
     CLANG_CXX_LANGUAGE_STANDARD: "c++17"
     CLANG_CXX_LIBRARY: "libc++"
+    MARKETING_VERSION: "0.3.9"
+    CURRENT_PROJECT_VERSION: "39"
 
 targets:
   T9Bopomofo:
@@ -32,9 +34,10 @@ targets:
       ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       DEVELOPMENT_TEAM: S24Z424MU4
       CODE_SIGN_STYLE: Automatic
-      # Let Automatic signing pick Development vs Distribution per action.
       CODE_SIGN_IDENTITY: ""
       PROVISIONING_PROFILE_SPECIFIER: ""
+      MARKETING_VERSION: "0.3.9"
+      CURRENT_PROJECT_VERSION: "39"
     dependencies:
       - target: T9Keyboard
         embed: true
@@ -63,6 +66,8 @@ targets:
       CODE_SIGN_IDENTITY: ""
       PROVISIONING_PROFILE_SPECIFIER: ""
       SKIP_INSTALL: YES
+      MARKETING_VERSION: "0.3.9"
+      CURRENT_PROJECT_VERSION: "39"
       LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks"
       SWIFT_OBJC_BRIDGING_HEADER: T9Bopomofo/RimeBridge/T9Bopomofo-Bridging-Header.h
       HEADER_SEARCH_PATHS: "$(inherited) $(SRCROOT)/T9Bopomofo/RimeBridge/include"
