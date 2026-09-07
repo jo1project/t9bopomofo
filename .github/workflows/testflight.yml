@@ -103,6 +103,11 @@ jobs:
             --apiKey "$API_KEY_ID" \
             --apiIssuer "$ISSUER_ID" 2>/dev/null | grep "com.jo1project.t9bopomofo" | head -1 | awk '{print $NF}' || echo "0")
 
+          # Ensure LATEST is a number
+          if ! [[ "$LATEST" =~ ^[0-9]+$ ]]; then
+            LATEST=0
+          fi
+
           NEW=$((LATEST + 1))
           echo "Build number: $NEW"
 
