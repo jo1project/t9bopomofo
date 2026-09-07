@@ -12,3 +12,4 @@ Frameworks/
 __pycache__/
 *.pyc
 T9Bopomofo.xcodeproj/
+AuthKey_*.p8
