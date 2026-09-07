@@ -98,20 +98,23 @@ jobs:
           API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
         run: |
-          # Get latest build number from TestFlight
-          LATEST=$(xcrun altool --list-apps \
+          # Get latest build from App Store Connect API
+          LATEST=$(xcrun altool --list-builds \
+            --app-identifier "com.jo1project.t9bopomofo" \
             --apiKey "$API_KEY_ID" \
-            --apiIssuer "$ISSUER_ID" 2>/dev/null | grep "com.jo1project.t9bopomofo" | head -1 | awk '{print $NF}' || echo "0")
+            --apiIssuer "$ISSUER_ID" 2>/dev/null | grep -E "^\s*[0-9]+" | tail -1 | awk '{print $1}' || echo "0")
 
           # Ensure LATEST is a number
           if ! [[ "$LATEST" =~ ^[0-9]+$ ]]; then
+            echo "Failed to get build number, using 0"
             LATEST=0
           fi
 
           NEW=$((LATEST + 1))
-          echo "Build number: $NEW"
+          echo "Latest build: $LATEST"
+          echo "New build: $NEW"
 
-          # Update Info.plist files after project generation
+          # Update Info.plist files
           plutil -replace CFBundleVersion -string "$NEW" T9Bopomofo/App/Info.plist
           plutil -replace CFBundleShortVersionString -string "0.3.9" T9Bopomofo/App/Info.plist
 
