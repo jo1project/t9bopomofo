@@ -25,22 +25,36 @@ jobs:
 
       - name: Import signing certificate and provisioning profiles
         env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
           API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           API_KEY_CONTENT: ${{ secrets.APP_STORE_CONNECT_API_KEY_CONTENT }}
           PROVISIONING_PROFILE_BASE64: ${{ secrets.PROVISIONING_PROFILE_BASE64 }}
           PROVISIONING_PROFILE_KEYBOARD_BASE64: ${{ secrets.PROVISIONING_PROFILE_KEYBOARD_BASE64 }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
           # Set up API key
           mkdir -p ~/private_keys
           echo "$API_KEY_CONTENT" > ~/private_keys/AuthKey_${API_KEY_ID}.p8
 
-          # Decode and install provisioning profiles
+          # Decode certificate and profiles
+          CERT_PATH=$RUNNER_TEMP/certificate.p12
           PROFILE_PATH="$RUNNER_TEMP/main.mobileprovision"
           KEYBOARD_PROFILE_PATH="$RUNNER_TEMP/keyboard.mobileprovision"
+          KEYCHAIN_PATH=$RUNNER_TEMP/build.keychain
 
+          echo "$BUILD_CERTIFICATE_BASE64" | base64 --decode > "$CERT_PATH"
           echo "$PROVISIONING_PROFILE_BASE64" | base64 --decode > "$PROFILE_PATH"
           echo "$PROVISIONING_PROFILE_KEYBOARD_BASE64" | base64 --decode > "$KEYBOARD_PROFILE_PATH"
+
+          # Create keychain and import certificate
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed 's/"//g')
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
           # Install profiles
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
@@ -54,7 +68,7 @@ jobs:
           echo "MAIN_PROFILE_UUID=$MAIN_UUID" >> $GITHUB_ENV
           echo "KEYBOARD_PROFILE_UUID=$KEYBOARD_UUID" >> $GITHUB_ENV
 
-          echo "✓ Profiles installed"
+          echo "✓ Certificate and profiles installed"
           echo "  Main UUID: $MAIN_UUID"
           echo "  Keyboard UUID: $KEYBOARD_UUID"
 
