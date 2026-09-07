@@ -36,27 +36,17 @@ workflows:
         script: |
           xcodegen generate
           ls -la "$XCODE_PROJECT"
-      - name: Set up code signing
+      - name: Set up App Store Connect authentication
         script: |
-          # Uses Codemagic ↔ App Store Connect integration to fetch/create
-          # Distribution certs + profiles for app + keyboard extension.
-          # IMPORTANT: Profiles must include App Groups and In-App Purchase
-          xcode-project use-profiles --verbose
+          # Prepare API key for xcodebuild automatic signing
+          mkdir -p ~/private_keys
 
-          # Verify profiles were fetched
-          echo "=== Available provisioning profiles ==="
-          ls -la ~/Library/MobileDevice/Provisioning\ Profiles/ || echo "No profiles directory"
+          # Codemagic integration provides these env vars
+          echo "$APP_STORE_CONNECT_PRIVATE_KEY" > ~/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8
 
-          if [ -d ~/Library/MobileDevice/Provisioning\ Profiles/ ]; then
-            echo "=== Profile details ==="
-            for profile in ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision; do
-              echo "Profile: $(basename "$profile")"
-              security cms -D -i "$profile" | plutil -p - | grep -A 2 "application-identifier\|com.apple.security.application-groups\|com.apple.developer.in-app-payments" || true
-            done
-          fi
-
-          echo "=== Keychain identities ==="
-          security find-identity -v -p codesigning
+          echo "✓ API Key ID: $APP_STORE_CONNECT_KEY_IDENTIFIER"
+          echo "✓ Issuer ID: $APP_STORE_CONNECT_ISSUER_ID"
+          echo "✓ Team ID: S24Z424MU4"
       - name: Incremental build number (optional)
         script: |
           LATEST=$(app-store-connect get-latest-testflight-build-number "$BUNDLE_ID" || echo "0")
@@ -79,14 +69,45 @@ workflows:
 
           echo "App version: 0.3.9 ($NEW)"
           echo "Keyboard version: 0.3.9 ($NEW)"
-      - name: Build ipa
+      - name: Archive with automatic signing
         script: |
-          # Use Codemagic's built-in signing with automatic provisioning
-          # This will use the App Store Connect integration to auto-create profiles
-          xcode-project build-ipa \
-            --project "$XCODE_PROJECT" \
-            --scheme "$XCODE_SCHEME" \
-            --config "Release"
+          xcodebuild archive \
+            -project "$XCODE_PROJECT" \
+            -scheme "$XCODE_SCHEME" \
+            -configuration Release \
+            -archivePath build/ios/xcarchive/T9Bopomofo.xcarchive \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8 \
+            -authenticationKeyID "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
+            -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID" \
+            CODE_SIGN_STYLE=Automatic \
+            DEVELOPMENT_TEAM=S24Z424MU4
+      - name: Export IPA
+        script: |
+          # Create export options
+          cat > /tmp/ExportOptions.plist <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>app-store</string>
+              <key>teamID</key>
+              <string>S24Z424MU4</string>
+              <key>uploadSymbols</key>
+              <true/>
+          </dict>
+          </plist>
+          PLIST
+
+          xcodebuild -exportArchive \
+            -archivePath build/ios/xcarchive/T9Bopomofo.xcarchive \
+            -exportPath build/ios/ipa \
+            -exportOptionsPlist /tmp/ExportOptions.plist \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8 \
+            -authenticationKeyID "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
+            -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID"
     artifacts:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
