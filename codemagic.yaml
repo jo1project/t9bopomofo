@@ -4,7 +4,7 @@ workflows:
     max_build_duration: 120
     instance_type: mac_mini_m2
     integrations:
-      app_store_connect: JoT9ASC
+      app_store_connect: JoT9
     environment:
       vars:
         BUNDLE_ID: com.jo1project.t9bopomofo
