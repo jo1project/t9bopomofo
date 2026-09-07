@@ -98,13 +98,22 @@ jobs:
 
       - name: Update project with profile UUIDs
         run: |
-          # Update project.yml with actual profile UUIDs
-          sed -i.bak "s/PROVISIONING_PROFILE_SPECIFIER: \"\"/PROVISIONING_PROFILE_SPECIFIER: \"$MAIN_PROFILE_UUID\"/" project.yml
+          # Update PROVISIONING_PROFILE_SPECIFIER for both targets
+          # Use awk to replace each occurrence separately
+          awk -v main="$MAIN_PROFILE_UUID" -v kbd="$KEYBOARD_PROFILE_UUID" '
+            /^  T9Bopomofo:$/ { in_main=1; in_kbd=0 }
+            /^  T9Keyboard:$/ { in_main=0; in_kbd=1 }
+            /PROVISIONING_PROFILE_SPECIFIER: ""/ {
+              if (in_main) { print "      PROVISIONING_PROFILE_SPECIFIER: \"" main "\""; next }
+              if (in_kbd) { print "      PROVISIONING_PROFILE_SPECIFIER: \"" kbd "\""; next }
+            }
+            { print }
+          ' project.yml > project.yml.tmp && mv project.yml.tmp project.yml
 
-          # Regenerate project with profile UUIDs
+          # Regenerate Xcode project
           xcodegen generate
 
-          echo "✓ Project updated with profile UUIDs"
+          echo "✓ Profile UUIDs set: Main=$MAIN_PROFILE_UUID, Keyboard=$KEYBOARD_PROFILE_UUID"
 
       - name: Build and Archive
         run: |
