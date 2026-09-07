@@ -9,21 +9,53 @@ actor LLMPredictor {
         var errorMessage: String?
     }
 
+    // ponytail: simple cache - 5 recent contexts
+    private var cache: [(context: String, result: SuggestResult)] = []
+    private let cacheSize = 5
+
     func suggest(after context: String, limit: Int = 5) async -> [String] {
         await suggestDetailed(after: context, limit: limit).words
     }
 
     func suggestDetailed(after context: String, limit: Int = 5) async -> SuggestResult {
+        let trimmed = context.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Check cache
+        if let cached = cache.first(where: { $0.context == trimmed }) {
+            return cached.result
+        }
+        guard !trimmed.isEmpty else {
+            return SuggestResult(words: [], errorMessage: "上文為空")
+        }
+
         let settings = AppSettings.shared
         guard settings.canUseLLM else {
             let reason = settings.llmBlockedReason
             return SuggestResult(words: [], errorMessage: reason.isEmpty ? "未啟用或未填 API Key" : reason)
         }
-        let trimmed = context.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            return SuggestResult(words: [], errorMessage: "上文為空")
+
+        // ponytail: retry up to 2 times on 429
+        var result = await callAPI(context: trimmed, limit: limit)
+        if result.errorMessage?.contains("HTTP 429") == true {
+            try? await Task.sleep(nanoseconds: 1_000_000_000) // 1s
+            result = await callAPI(context: trimmed, limit: limit)
+            if result.errorMessage?.contains("HTTP 429") == true {
+                try? await Task.sleep(nanoseconds: 2_000_000_000) // 2s
+                result = await callAPI(context: trimmed, limit: limit)
+            }
         }
 
+        // Cache
+        cache.append((context: trimmed, result: result))
+        if cache.count > cacheSize {
+            cache.removeFirst()
+        }
+
+        return result
+    }
+
+    private func callAPI(context: String, limit: Int) async -> SuggestResult {
+        let settings = AppSettings.shared
         let base = settings.llmBaseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         guard let url = URL(string: base + "/chat/completions") else {
             return SuggestResult(words: [], errorMessage: "Base URL 無效")
@@ -32,7 +64,7 @@ actor LLMPredictor {
         let prompt = """
         你是繁體中文輸入法聯想引擎。根據使用者刚輸入的文字，預測接下來最可能的接續詞或短語。
         只回傳 JSON 字串陣列，例如 ["好的","可以","謝謝"]，不要其他說明。
-        最多 \(limit) 個，每個不超過 8 字。上文：\(trimmed)
+        最多 \(limit) 個，每個不超過 8 字。上文：\(context)
         """
 
         var req = URLRequest(url: url)
