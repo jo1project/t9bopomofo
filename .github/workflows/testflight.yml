@@ -56,21 +56,23 @@ jobs:
           security list-keychain -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed 's/"//g')
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
-          # Install profiles
-          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          cp "$PROFILE_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/
-          cp "$KEYBOARD_PROFILE_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/
-
-          # Get profile UUIDs
+          # Get profile UUIDs and names
           MAIN_UUID=$(security cms -D -i "$PROFILE_PATH" | plutil -extract UUID raw -)
           KEYBOARD_UUID=$(security cms -D -i "$KEYBOARD_PROFILE_PATH" | plutil -extract UUID raw -)
+          MAIN_NAME=$(security cms -D -i "$PROFILE_PATH" | plutil -extract Name raw -)
+          KEYBOARD_NAME=$(security cms -D -i "$KEYBOARD_PROFILE_PATH" | plutil -extract Name raw -)
+
+          # Install profiles using their UUIDs as filenames
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp "$PROFILE_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/${MAIN_UUID}.mobileprovision
+          cp "$KEYBOARD_PROFILE_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/${KEYBOARD_UUID}.mobileprovision
 
           echo "MAIN_PROFILE_UUID=$MAIN_UUID" >> $GITHUB_ENV
           echo "KEYBOARD_PROFILE_UUID=$KEYBOARD_UUID" >> $GITHUB_ENV
 
           echo "✓ Certificate and profiles installed"
-          echo "  Main UUID: $MAIN_UUID"
-          echo "  Keyboard UUID: $KEYBOARD_UUID"
+          echo "  Main:     $MAIN_NAME ($MAIN_UUID)"
+          echo "  Keyboard: $KEYBOARD_NAME ($KEYBOARD_UUID)"
 
       - name: Increment build number
         env:
@@ -104,7 +106,7 @@ jobs:
             CODE_SIGN_STYLE=Manual \
             DEVELOPMENT_TEAM=S24Z424MU4 \
             CODE_SIGN_IDENTITY="Apple Distribution" \
-            PROVISIONING_PROFILE_SPECIFIER="$MAIN_PROFILE_UUID" \
+            PROVISIONING_PROFILE="$MAIN_PROFILE_UUID" \
             OTHER_CODE_SIGN_FLAGS="--keychain $RUNNER_TEMP/build.keychain"
 
       - name: Export IPA
