@@ -177,7 +177,7 @@ final class RimeEngine {
         }
     }
 
-    func getContextAsync() async -> (input: String, preedit: String, isComposing: Bool, candidates: [(text: String, comment: String)]) {
+    func getContextAsync(candidateLimit: Int = 40) async -> (input: String, preedit: String, isComposing: Bool, candidates: [(text: String, comment: String)]) {
         await withCheckedContinuation { continuation in
             queue.async { [weak self] in
                 guard let self = self else {
@@ -192,7 +192,7 @@ final class RimeEngine {
                 let input = self.inputLocked()
                 let preedit = self.preeditLocked()
                 let composing = self.isComposingLocked()
-                let cands = self.candidatesLocked(limit: 12)
+                let cands = self.candidatesLocked(limit: candidateLimit)
 
                 continuation.resume(returning: (input, preedit, composing, cands))
             }

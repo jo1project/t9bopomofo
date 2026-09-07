@@ -109,7 +109,7 @@ final class KeyboardViewController: UIInputViewController {
         candidatePanel?.setCandidates(engine.candidates)
     }
 
-    private func reloadCandidatesDebounced(delay: TimeInterval = 0.05) {
+    private func reloadCandidatesDebounced(delay: TimeInterval = 0.02) {  // ponytail: 50ms->20ms for faster typing
         reloadTask?.cancel()
         let task = DispatchWorkItem { [weak self] in
             self?.reloadCandidates()
@@ -233,9 +233,8 @@ final class KeyboardViewController: UIInputViewController {
                 pin(en)
                 en.onInsert = { [weak self] s in
                     guard let self else { return }
-                    _ = self.engine.insertPassthroughAndClear("")
                     self.textDocumentProxy.insertText(s)
-                    self.reloadCandidates()
+                    // ponytail: skip engine/reload in EN mode - direct insert faster
                 }
                 en.onBackspace = { [weak self] in self?.textDocumentProxy.deleteBackward() }
                 en.onMode = { [weak self] m in

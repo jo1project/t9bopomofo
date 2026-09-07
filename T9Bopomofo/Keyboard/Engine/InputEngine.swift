@@ -17,7 +17,7 @@ final class InputEngine: ObservableObject {
     private let userLexicon: UserLexicon
     private let rime = RimeEngine.shared
     private var loaded = false
-    private var candidateLimit = 12
+    private var candidateLimit = 40  // ponytail: 12->40 so rare chars appear
     private var llmTask: Task<Void, Never>?
     private var lastPredictionContext: String = ""
     private var updateTask: Task<Void, Never>?
@@ -316,7 +316,7 @@ final class InputEngine: ObservableObject {
     // MARK: - Rime sync
 
     private func syncFromRimeAsync() async {
-        let context = await rime.getContextAsync()
+        let context = await rime.getContextAsync(candidateLimit: candidateLimit)
 
         await MainActor.run { [weak self] in
             guard let self = self else { return }
