@@ -40,11 +40,20 @@ workflows:
         script: |
           # Uses Codemagic ↔ App Store Connect integration to fetch/create
           # Distribution certs + profiles for app + keyboard extension.
+          # IMPORTANT: Profiles must include App Groups and In-App Purchase
           xcode-project use-profiles --verbose
 
           # Verify profiles were fetched
           echo "=== Available provisioning profiles ==="
           ls -la ~/Library/MobileDevice/Provisioning\ Profiles/ || echo "No profiles directory"
+
+          if [ -d ~/Library/MobileDevice/Provisioning\ Profiles/ ]; then
+            echo "=== Profile details ==="
+            for profile in ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision; do
+              echo "Profile: $(basename "$profile")"
+              security cms -D -i "$profile" | plutil -p - | grep -A 2 "application-identifier\|com.apple.security.application-groups\|com.apple.developer.in-app-payments" || true
+            done
+          fi
 
           echo "=== Keychain identities ==="
           security find-identity -v -p codesigning
@@ -72,32 +81,12 @@ workflows:
           echo "Keyboard version: 0.3.9 ($NEW)"
       - name: Build ipa
         script: |
-          # Create export options
-          cat > /tmp/ExportOptions.plist <<EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>method</key>
-              <string>app-store</string>
-              <key>teamID</key>
-              <string>S24Z424MU4</string>
-              <key>uploadSymbols</key>
-              <true/>
-              <key>signingStyle</key>
-              <string>automatic</string>
-              <key>signingCertificate</key>
-              <string>Apple Distribution</string>
-          </dict>
-          </plist>
-          EOF
-
+          # Use Codemagic's built-in signing with automatic provisioning
+          # This will use the App Store Connect integration to auto-create profiles
           xcode-project build-ipa \
             --project "$XCODE_PROJECT" \
             --scheme "$XCODE_SCHEME" \
-            --config "Release" \
-            --archive-flags="-allowProvisioningUpdates" \
-            --export-options-plist=/tmp/ExportOptions.plist
+            --config "Release"
     artifacts:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
