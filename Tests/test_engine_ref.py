@@ -327,10 +327,10 @@ def test_you_beats_rao():
         cands3.append((score(wt, tones_of(r), "x"), w, r))
     cands3.sort(reverse=True)
     assert cands3[0][1] == "有", cands3[:8]
-    # 擾 you4 must be penalized
-    rao = [c for c in cands3 if c[1] == "擾"]
-    assert rao and rao[0][0] < cands3[0][0]
-    print("you_beats_rao OK", cands[:3], "with tone", cands3[:3])
+    # 又/右 (you4) must be penalized with 3rd tone
+    you4 = [c for c in cands3 if c[1] in ("又", "右")]
+    assert you4 and you4[0][0] < cands3[0][0]
+    print("you_beats_you4 OK", cands[:3], "with tone", cands3[:3])
 
 
 def main() -> int:

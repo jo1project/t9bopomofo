@@ -41,12 +41,14 @@ final class InputEngine: ObservableObject {
         }
     }
 
+    private var isLexiconLoading = false
+
     func prepare(bundle: Bundle = .main) {
         if !usingRime {
             usingRime = rime.start(bundle: bundle)
         }
-        // Always try to load Swift lexicon so fuzzy can merge alongside Rime.
-        ensureLexiconLoaded(bundle: bundle)
+        // Load Swift lexicon asynchronously in background so it doesn't block keyboard presentation.
+        ensureLexiconLoadedAsync(bundle: bundle)
         if usingRime {
             syncFromRime()
             return
@@ -54,26 +56,52 @@ final class InputEngine: ObservableObject {
         refreshSwiftCandidates()
     }
 
-    private func ensureLexiconLoaded(bundle: Bundle) {
-        guard !loaded else { return }
-        do {
-            try lexicon.loadFromBundle(bundle: bundle)
-            loaded = true
-        } catch {
-            let fm = FileManager.default
-            let dirs = [
-                URL(fileURLWithPath: "Resources/rime"),
-                URL(fileURLWithPath: "../Resources/rime"),
-                URL(fileURLWithPath: "../../Resources/rime"),
-            ]
-            for dir in dirs where fm.fileExists(atPath: dir.path) {
-                let urls = ["taiwan_phrases.dict.yaml", "bopomofo_t9.dict.yaml"]
-                    .map { dir.appendingPathComponent($0) }
-                    .filter { fm.fileExists(atPath: $0.path) }
-                if !urls.isEmpty {
-                    try? lexicon.load(from: urls)
-                    loaded = true
-                    break
+    private func ensureLexiconLoadedAsync(bundle: Bundle) {
+        guard !loaded, !isLexiconLoading else { return }
+        isLexiconLoading = true
+
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            guard let self else { return }
+            var loadedSuccessfully = false
+            do {
+                try self.lexicon.loadFromBundle(bundle: bundle)
+                loadedSuccessfully = true
+            } catch {
+                let fm = FileManager.default
+                let dirs = [
+                    URL(fileURLWithPath: "Resources/rime"),
+                    URL(fileURLWithPath: "../Resources/rime"),
+                    URL(fileURLWithPath: "../../Resources/rime"),
+                ]
+                for dir in dirs where fm.fileExists(atPath: dir.path) {
+                    let urls = ["taiwan_phrases.dict.yaml", "bopomofo_t9.dict.yaml"]
+                        .map { dir.appendingPathComponent($0) }
+                        .filter { fm.fileExists(atPath: $0.path) }
+                    if !urls.isEmpty {
+                        try? self.lexicon.load(from: urls)
+                        loadedSuccessfully = true
+                        break
+                    }
+                }
+            }
+
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.loaded = loadedSuccessfully
+                self.isLexiconLoading = false
+                if loadedSuccessfully {
+                    if self.isComposing {
+                        if self.usingRime {
+                            self.updateTask?.cancel()
+                            self.updateTask = Task { [weak self] in
+                                await self?.syncFromRimeAsync()
+                            }
+                        } else {
+                            self.refreshSwiftCandidates()
+                        }
+                    } else if !self.usingRime {
+                        self.refreshSwiftCandidates()
+                    }
                 }
             }
         }

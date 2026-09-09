@@ -85,14 +85,16 @@ final class DictionaryLoader: @unchecked Sendable {
 
     static func parseDictionaryYAML(_ text: String) -> [LexiconEntry] {
         var result: [LexiconEntry] = []
+        result.reserveCapacity(100000)
         var pastHeader = false
-        for line in text.split(separator: "\n", omittingEmptySubsequences: false) {
+        for line in text.split(separator: "\n", omittingEmptySubsequences: true) {
             let raw = String(line)
-            if raw.trimmingCharacters(in: .whitespaces) == "..." {
-                pastHeader = true
+            if !pastHeader {
+                if raw.trimmingCharacters(in: .whitespaces) == "..." {
+                    pastHeader = true
+                }
                 continue
             }
-            guard pastHeader else { continue }
             let trimmed = raw.trimmingCharacters(in: .whitespaces)
             if trimmed.isEmpty || trimmed.hasPrefix("#") { continue }
 

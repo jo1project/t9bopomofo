@@ -61,8 +61,12 @@ final class RimeEngine {
         api.pointee.setup(&traits)
         api.pointee.initialize(&traits)
 
-        if api.pointee.start_maintenance(1) != 0 {
-            api.pointee.join_maintenance_thread()
+        // Only run maintenance and block when files were synced or updated.
+        // On normal launches, schemas and binaries are already compiled in user/build.
+        if roots.didSync {
+            if api.pointee.start_maintenance(1) != 0 {
+                api.pointee.join_maintenance_thread()
+            }
         }
 
         session = api.pointee.create_session()
@@ -277,6 +281,7 @@ final class RimeEngine {
     private struct Roots {
         let shared: String
         let user: String
+        let didSync: Bool
     }
 
     private func deployResources(from: Bundle) -> Roots? {
@@ -354,7 +359,7 @@ final class RimeEngine {
             NSLog("[RimeEngine] synced resources → %@", userURL.path)
         }
 
-        return Roots(shared: sharedURL.path, user: userURL.path)
+        return Roots(shared: sharedURL.path, user: userURL.path, didSync: needSync)
     }
 
     private func locateBundledRime(in bundle: Bundle) -> URL? {

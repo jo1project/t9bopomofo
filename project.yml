@@ -18,7 +18,7 @@ settings:
     CLANG_CXX_LANGUAGE_STANDARD: "c++17"
     CLANG_CXX_LIBRARY: "libc++"
     MARKETING_VERSION: "0.3.9"
-    CURRENT_PROJECT_VERSION: "41"
+    CURRENT_PROJECT_VERSION: "42"
 
 targets:
   T9Bopomofo:
@@ -37,7 +37,7 @@ targets:
       CODE_SIGN_IDENTITY: "Apple Distribution"
       PROVISIONING_PROFILE_SPECIFIER: ""
       MARKETING_VERSION: "0.3.9"
-      CURRENT_PROJECT_VERSION: "41"
+      CURRENT_PROJECT_VERSION: "42"
     dependencies:
       - target: T9Keyboard
         embed: true
@@ -67,7 +67,7 @@ targets:
       PROVISIONING_PROFILE_SPECIFIER: ""
       SKIP_INSTALL: YES
       MARKETING_VERSION: "0.3.9"
-      CURRENT_PROJECT_VERSION: "41"
+      CURRENT_PROJECT_VERSION: "42"
       LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks"
       SWIFT_OBJC_BRIDGING_HEADER: T9Bopomofo/RimeBridge/T9Bopomofo-Bridging-Header.h
       HEADER_SEARCH_PATHS: "$(inherited) $(SRCROOT)/T9Bopomofo/RimeBridge/include"

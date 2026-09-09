@@ -32,7 +32,6 @@ final class KeyboardViewController: UIInputViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = UIColor(white: 0.82, alpha: 1)
-        engine.prepare(bundle: Bundle(for: KeyboardViewController.self))
 
         candidateBar.translatesAutoresizingMaskIntoConstraints = false
         keyboardContainer.translatesAutoresizingMaskIntoConstraints = false
@@ -89,11 +88,12 @@ final class KeyboardViewController: UIInputViewController {
 
         renderKeyboard()
         reloadCandidates()
+
+        engine.prepare(bundle: Bundle(for: KeyboardViewController.self))
     }
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        engine.prepare(bundle: Bundle(for: KeyboardViewController.self))
         AppSettings.shared.reloadFromDisk()
         if !engine.isComposing {
             refreshPredictionsFromDocument()
