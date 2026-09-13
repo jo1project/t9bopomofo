@@ -6,6 +6,8 @@ import Security
 /// in App Group so unsigned builds can still degrade gracefully).
 enum KeychainStore {
     private static let service = "com.jo1project.t9bopomofo.settings"
+    // ponytail: share keychain between app and extension
+    private static let accessGroup = "S24Z424MU4.com.jo1project.t9bopomofo"
 
     static func set(_ value: String, account: String) {
         let data = Data(value.utf8)
@@ -13,6 +15,7 @@ enum KeychainStore {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
+            kSecAttrAccessGroup as String: accessGroup,
         ]
         SecItemDelete(query as CFDictionary)
         guard !value.isEmpty else { return }
@@ -27,6 +30,7 @@ enum KeychainStore {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
+            kSecAttrAccessGroup as String: accessGroup,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne,
         ]
@@ -41,6 +45,7 @@ enum KeychainStore {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
+            kSecAttrAccessGroup as String: accessGroup,
         ]
         SecItemDelete(query as CFDictionary)
     }
