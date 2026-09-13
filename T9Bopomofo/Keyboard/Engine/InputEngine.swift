@@ -231,8 +231,10 @@ final class InputEngine: ObservableObject {
                 if !text.isEmpty, !self.isComposing {
                     self.lastPredictionContext = text
                     self.applyLocalPredictions(after: text)
-                    // ponytail: also trigger LLM after selecting candidate
-                    self.scheduleLLMPredictions(after: text, hasNetworkAccess: true)
+                    // ponytail: trigger LLM, check permission inside scheduleLLMPredictions
+                    await MainActor.run {
+                        self.scheduleLLMPredictions(after: text, hasNetworkAccess: true)
+                    }
                 }
             }
             return text
