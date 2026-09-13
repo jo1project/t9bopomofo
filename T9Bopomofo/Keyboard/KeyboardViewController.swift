@@ -321,8 +321,13 @@ final class KeyboardViewController: UIInputViewController {
             let out = engine.handleSymbol(s)
             textDocumentProxy.insertText(out)
         case .space:
-            let out = engine.handleSpace()
-            textDocumentProxy.insertText(out)
+            // ponytail: space = tone1 when composing, else space
+            if engine.isComposing {
+                engine.tapTone("q")
+            } else {
+                let out = engine.handleSpace()
+                textDocumentProxy.insertText(out)
+            }
         case .enter:
             let out = engine.handleReturn()
             textDocumentProxy.insertText(out)
@@ -340,6 +345,8 @@ final class KeyboardViewController: UIInputViewController {
         if candidatesExpanded {
             engine.setCandidateLimit(64)
         }
+        // ponytail: update space key label dynamically
+        zhuyinKeyboard?.updateSpaceKey(isComposing: engine.isComposing)
         // Use debounced reload for smoother typing
         reloadCandidatesDebounced()
     }

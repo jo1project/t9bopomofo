@@ -15,6 +15,7 @@ final class ZhuyinKeyboardView: UIView {
     private let separator = UIView()
     private weak var activeCallout: KeyCalloutView?
     private weak var calloutHost: UIView?
+    private weak var spaceButton: KeyButton?  // ponytail: track space key for dynamic label
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -73,6 +74,9 @@ final class ZhuyinKeyboardView: UIView {
                     btn.enableRepeatDelete { [weak self] in
                         self?.onAction?(.backspace)
                     }
+                }
+                if case .space = key.action {  // ponytail: save space button ref
+                    spaceButton = btn
                 }
                 addSubview(btn)
                 keyButtons.append(btn)
@@ -179,6 +183,11 @@ final class ZhuyinKeyboardView: UIView {
         activeCallout?.removeFromSuperview()
         activeCallout = nil
         calloutHost = nil
+    }
+
+    // ponytail: update space key label based on composing state
+    func updateSpaceKey(isComposing: Bool) {
+        spaceButton?.setTitle(isComposing ? "ˉ" : "空格/EN", for: .normal)
     }
 }
 

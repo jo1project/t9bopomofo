@@ -324,7 +324,8 @@ final class InputEngine: ObservableObject {
                         source: .llm
                     ))
                 }
-                self.candidates = merged
+                // ponytail: sort by score (local predictions first, then LLM)
+                self.candidates = merged.sorted { $0.score > $1.score }
                 self.predictionStatus = ""
                 self.onCandidatesChanged?()
             }

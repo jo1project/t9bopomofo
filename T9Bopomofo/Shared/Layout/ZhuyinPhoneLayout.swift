@@ -69,7 +69,7 @@ enum ZhuyinPhoneLayout {
 
     static let rows: [Row] = [
         Row(id: "r0", keys: [
-            Key(id: "tone1", label: "ˉ", width: 0.16, action: .tone("q"), callouts: toneCallouts(excluding: "q")),
+            Key(id: "tone1", label: "˙", width: 0.16, action: .toneNeutral, callouts: toneCallouts(excluding: "q")),  // ponytail: 輕聲移到這
             t9Key("1", "ㄅㄉㄚ", exact: [("ㄅ", "b"), ("ㄉ", "d"), ("ㄚ", "a")]),
             t9Key("2", "ㄍㄐㄞ", exact: [("ㄍ", "g"), ("ㄐ", "j"), ("ㄞ", "I")]),
             t9Key("3", "ㄓㄗㄢㄦ", exact: [("ㄓ", "Z"), ("ㄗ", "z"), ("ㄢ", "M"), ("ㄦ", "R")], reverseCallouts: true),
