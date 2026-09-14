@@ -9310,6 +9310,7 @@ min_phrase_weight: 100
 啑	tiy
 啑	zaq
 啒	gux
+啟	qix
 啔	qix
 啕	tKw
 啖	dMy
@@ -9326,7 +9327,6 @@ min_phrase_weight: 100
 啝	hew
 啞	yaq	50%
 啞	yax	50%
-啟	qix
 啠	Zew
 啡	fJq
 啢	liOx
@@ -15297,6 +15297,7 @@ min_phrase_weight: 100
 棰	CuJw
 稜	CPq
 稜	lPq
+稜	lPw
 稜	lPy
 稜	liPw
 棲	qiq
@@ -15796,6 +15797,7 @@ min_phrase_weight: 100
 檍	iy
 檎	qiNw
 檏	pux
+簷	yMw
 檑	lJw
 檒	fPq
 檓	huJx
@@ -16465,6 +16467,7 @@ min_phrase_weight: 100
 泂	jvPx
 泃	gLq
 泃	jvq
+洩	xiEy
 泅	qiLw
 泆	iy
 泇	jiaq
@@ -16587,7 +16590,6 @@ min_phrase_weight: 100
 洦	poy
 洧	wJx
 洨	xiKw
-洩	xiEy
 洪	huPw
 洫	xvy
 洬	Suoy
@@ -19501,6 +19503,9 @@ min_phrase_weight: 100
 眾	ZuPy
 眿	moy
 著	ZKq	5%
+著	ZKw	5%
+著	Ze	85%
+著	Zuow	5%
 睁	ZPq
 睂	mJw
 睃	jvMq
@@ -20129,6 +20134,8 @@ min_phrase_weight: 100
 祒	tiKw
 祓	fuw
 祔	fuy
+秘	biy	10%
+秘	miy	90%
 祖	zux
 祗	Zq
 祘	suMy
@@ -20272,8 +20279,6 @@ min_phrase_weight: 100
 秕	bix
 秖	Zq
 秗	vy
-秘	biy	10%
-秘	miy	90%
 秙	kuy
 秚	bMy
 秛	piq
@@ -20354,7 +20359,6 @@ min_phrase_weight: 100
 稙	Zw
 稚	Zy
 稛	kuNx
-稜	lPw
 稝	pPw
 稞	keq
 稟	biPx
@@ -20972,7 +20976,6 @@ min_phrase_weight: 100
 簴	jvy
 簵	duy
 簶	luy
-簷	yMw
 簸	box	50%
 簸	boy	50%
 簹	dOq
@@ -21619,6 +21622,7 @@ min_phrase_weight: 100
 繫	xiy	50%
 繬	sey
 繭	jiMx
+韁	jiOq
 繯	huMw
 繰	qiKq	50%
 繰	sKq	50%
@@ -23360,10 +23364,7 @@ min_phrase_weight: 100
 葔	hLw
 葕	yMy
 葖	tuw
-著	ZKw	0%
-著	Ze	0%
 著	Zuy	100%
-著	Zuow	0%
 葘	zq
 葙	xiOq
 葚	rNy	50%
@@ -24696,6 +24697,7 @@ min_phrase_weight: 100
 裍	kuNx
 裎	CPw	50%
 裎	CPx	50%
+裡	lix
 裐	jvMq
 裑	SNq
 裒	pLw
@@ -24714,7 +24716,6 @@ min_phrase_weight: 100
 裞	SuJy
 裟	Saq
 裠	qvNw
-裡	lix
 裢	liMw
 裢	SKq
 裣	liMx
@@ -26256,6 +26257,7 @@ min_phrase_weight: 100
 踈	Suq
 踉	liOw	50%
 踉	liOy	50%
+踴	vPx
 踋	jiKx
 踌	CLw
 踍	qiKq
@@ -26303,7 +26305,6 @@ min_phrase_weight: 100
 踳	CuMx
 踳	CuNq
 踳	CuNx
-踴	vPx
 踵	ZuPx
 踶	diy
 踷	Zax
@@ -29080,7 +29081,6 @@ min_phrase_weight: 100
 鞾	xvEq
 鞿	jiq
 韀	jiMq
-韁	jiOq
 韂	CMy
 韃	daw
 韄	huy
@@ -30157,6 +30157,7 @@ min_phrase_weight: 100
 鮋	yLw
 鮌	guNx
 鮍	piw
+鯰	niMw
 鮏	xiPq
 鮏	ZPq
 鮐	tIw
@@ -30265,7 +30266,6 @@ min_phrase_weight: 100
 鯭	mPx
 鯮	zuPq
 鯯	Zy
-鯰	niMw
 鯱	hux
 鯲	vw
 鯳	dix
@@ -31019,6 +31019,7 @@ min_phrase_weight: 100
 麧	hew
 麨	CKx
 麩	fuq
+麵	miMy
 麫	miMx
 麬	fuq
 麭	pKy
@@ -31030,7 +31031,6 @@ min_phrase_weight: 100
 麲	yMy
 麳	lIw
 麴	qvq
-麵	miMy
 麶	Cq
 麶	liw
 麷	fPq
@@ -38814,7 +38814,6 @@ min_phrase_weight: 100
 𥦥	xvPy
 𥦨	key
 𥦶	xiMy
-𥦷	uPy
 𥦷	uPy
 𥧂	guPx
 𥧆	Lx
@@ -73544,13 +73543,13 @@ min_phrase_weight: 100
 模書	mow Suq
 模本	mow bNx
 模板工	mow bMx guPq
+模稜	mow lPw
+模稜兩可	mow lPw liOx kex
 模楷	mow kIx
 模模糊糊	mow mo hu hu
 模樣	muw yOy
 模特	mow tey
 模特兒	mow tey r
-模稜	mow lPw
-模稜兩可	mow lPw liOx kex
 模範	mow fMy
 模範區	mow fMy qvq
 模範大音階	mow fMy day iNq jiEq
@@ -75216,6 +75215,8 @@ min_phrase_weight: 100
 洩沓	iy tay
 洩洩	iy iy
 洩洩沓沓	iy iy tay tay
+洩漏	xiEy lLy
+洩漏	xiEy luy
 洩露	xiEy luy
 洩露天機	xiEy luy tiMq jiq
 泉脈	qvMw mIy
@@ -75571,8 +75572,6 @@ min_phrase_weight: 100
 洞見癥結	duPy jiMy ZPq jiEw
 津津樂道	jiNq jiNq ley dKy
 津貼制度	jiNq tiEq Zy duy
-洩漏	xiEy lLy
-洩漏	xiEy luy
 洪喬擲水	huPw qiKw Zw SuJx
 洪洞	huPw tuPy
 洪洞縣	huPw tuPw xiMy
@@ -79829,8 +79828,8 @@ min_phrase_weight: 100
 百辟	bIx biy
 百鳥朝鳳	bIx niKx CKw fPy
 皂差	zKy CIq
-皂纛	zKy duw
 皂白不分	zKy bIw buy fNq
+皂纛	zKy duw
 的一確二	diw iq qvEy Ry
 的些	diy xiEq
 的信	diw xiNy
@@ -80815,6 +80814,7 @@ min_phrase_weight: 100
 著呢	Ze ne
 著地	ZKw diy
 著地	Zuow de
+著地	Zuow diy
 著地還錢	Zuow diy huMw qiMw
 著墨	Zuow moy
 著大火	ZKw day huox
@@ -80866,6 +80866,7 @@ min_phrase_weight: 100
 著腳書樓	Zuow jiKx Suq lLw
 著色	Zuow sey
 著花	ZKw huaq
+著花	Zuow huaq
 著莫	Zuow moy
 著落	Zuow luoy
 著落	Zuow luo
@@ -84651,9 +84652,9 @@ min_phrase_weight: 100
 翹曲	qiKw qvq
 翹望	qiKw wOy
 翹材	qiKw cIw
+翹稜	qiKw lP
 翹楚	qiKw Cux
 翹盼	qiKw pMy
-翹稜	qiKw lP
 翹翹	qiKw qiKw
 翹舌音	qiKw Sew iNq
 翹足	qiKw zuw
@@ -87294,11 +87295,9 @@ min_phrase_weight: 100
 葉面對稱	yey miMy duJy CPy
 葑菲	fPq fJx
 葑菲之采	fPq fJx Zq cIx
-著地	Zuow diy
 著稱	Zuy CPq
 著稱於世	Zuy CPq vw Sy
 著績	Zuy jiq
-著花	Zuow huaq
 葛仙米	gex xiMq mix
 葛仙翁	gex xiMq uPq
 葛優	gex yLq
