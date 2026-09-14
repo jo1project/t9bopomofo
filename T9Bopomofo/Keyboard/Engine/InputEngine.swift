@@ -123,8 +123,11 @@ final class InputEngine: ObservableObject {
             updateTask?.cancel()
             updateTask = Task { [weak self] in
                 _ = await self?.rime.processKeyAsync(key)
-                guard !Task.isCancelled else { return }
-                await self?.syncFromRimeAsync()
+                guard let self, !Task.isCancelled else { return }
+                // ponytail: sync UI immediately for responsive typing
+                await MainActor.run {
+                    self.syncFromRime()
+                }
             }
             return
         }
@@ -137,8 +140,11 @@ final class InputEngine: ObservableObject {
             updateTask?.cancel()
             updateTask = Task { [weak self] in
                 _ = await self?.rime.processKeyAsync(tone)
-                guard !Task.isCancelled else { return }
-                await self?.syncFromRimeAsync()
+                guard let self, !Task.isCancelled else { return }
+                // ponytail: sync UI immediately so candidates are ready
+                await MainActor.run {
+                    self.syncFromRime()
+                }
             }
             return
         }
