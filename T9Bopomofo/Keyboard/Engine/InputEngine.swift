@@ -123,11 +123,8 @@ final class InputEngine: ObservableObject {
             updateTask?.cancel()
             updateTask = Task { [weak self] in
                 _ = await self?.rime.processKeyAsync(key)
-                guard let self, !Task.isCancelled else { return }
-                // ponytail: sync UI immediately for responsive typing
-                await MainActor.run {
-                    self.syncFromRime()
-                }
+                guard !Task.isCancelled else { return }
+                await self?.syncFromRimeAsync()
             }
             return
         }
@@ -140,11 +137,8 @@ final class InputEngine: ObservableObject {
             updateTask?.cancel()
             updateTask = Task { [weak self] in
                 _ = await self?.rime.processKeyAsync(tone)
-                guard let self, !Task.isCancelled else { return }
-                // ponytail: sync UI immediately so candidates are ready
-                await MainActor.run {
-                    self.syncFromRime()
-                }
+                guard !Task.isCancelled else { return }
+                await self?.syncFromRimeAsync()
             }
             return
         }
@@ -229,21 +223,14 @@ final class InputEngine: ObservableObject {
                 lastCommitted = text
             }
 
-            // ponytail: sync UI immediately to clear preedit
-            syncFromRime()
-
-            // Trigger predictions only if composition finished
-            if !text.isEmpty, !isComposing {
-                lastPredictionContext = text
-                applyLocalPredictions(after: text)
-                // ponytail: delay LLM to avoid typing lag
-                updateTask?.cancel()
-                updateTask = Task { [weak self] in
-                    try? await Task.sleep(for: .milliseconds(500))
-                    guard let self, !Task.isCancelled else { return }
-                    await MainActor.run {
-                        self.scheduleLLMPredictions(after: text, hasNetworkAccess: true)
-                    }
+            // Update candidates asynchronously
+            updateTask?.cancel()
+            updateTask = Task { [weak self] in
+                await self?.syncFromRimeAsync()
+                guard let self = self, !Task.isCancelled else { return }
+                if !text.isEmpty, !self.isComposing {
+                    self.lastPredictionContext = text
+                    self.applyLocalPredictions(after: text)
                 }
             }
             return text
