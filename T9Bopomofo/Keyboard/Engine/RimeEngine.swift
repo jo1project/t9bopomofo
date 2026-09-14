@@ -8,7 +8,8 @@ final class RimeEngine {
 
     private(set) var isReady = false
     private var session: RimeSessionId = 0
-    private let resourceVersion = "rime-bundle-v3-octagram"
+    /// Bumped only for changes not reflected in bundled resource file sizes (e.g. new file names).
+    private let resourceVersionSalt = "rime-bundle-v3-octagram"
     private let schemaId = "bopomofo_phone"
 
     private var sharedDir: NSString = ""
@@ -301,9 +302,14 @@ final class RimeEngine {
             return nil
         }
 
+        // Content-derived, not a hand-maintained string: any edit to a bundled
+        // schema/dict/lua file (dict.yaml tone fixes included) changes its byte
+        // size, so it redeploys automatically instead of relying on someone to
+        // remember bumping a version constant.
+        let currentVersion = resourceVersion(at: bundled)
         let needSync: Bool = {
             guard let existing = try? String(contentsOf: marker, encoding: .utf8) else { return true }
-            return existing.trimmingCharacters(in: .whitespacesAndNewlines) != resourceVersion
+            return existing.trimmingCharacters(in: .whitespacesAndNewlines) != currentVersion
         }()
 
         if needSync {
@@ -355,7 +361,7 @@ final class RimeEngine {
             let buildDir = userURL.appendingPathComponent("build")
             try? fm.removeItem(at: buildDir)
 
-            try? resourceVersion.write(to: marker, atomically: true, encoding: .utf8)
+            try? currentVersion.write(to: marker, atomically: true, encoding: .utf8)
             NSLog("[RimeEngine] synced resources → %@", userURL.path)
         }
 
@@ -375,5 +381,23 @@ final class RimeEngine {
             return url
         }
         return nil
+    }
+
+    /// Sums file sizes of every bundled resource that gets deployed, so any content
+    /// change (e.g. a bigger dict.yaml) is detected without a manually bumped constant.
+    private func resourceVersion(at bundled: URL) -> String {
+        let fm = FileManager.default
+        let names = [
+            "essay.txt", "zh-hant-t-essay-bgw.gram", "default.yaml", "key_bindings.yaml",
+            "punctuation.yaml", "symbols.yaml",
+            "bopomofo_phone.schema.yaml", "bopomofo_t9.schema.yaml", "bopomofo_t9.dict.yaml",
+            "taiwan_phrases.dict.yaml", "rime.lua",
+        ]
+        var totalSize: UInt64 = 0
+        for name in names {
+            let attrs = try? fm.attributesOfItem(atPath: bundled.appendingPathComponent(name).path)
+            totalSize += (attrs?[.size] as? UInt64) ?? 0
+        }
+        return "\(resourceVersionSalt)-\(totalSize)"
     }
 }
