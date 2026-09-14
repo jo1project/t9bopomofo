@@ -37,8 +37,10 @@ speller:
   algebra:
     - xform/^r5$/er5/
     # 1. 先搬移可能衝突的字母 (ㄑ->A, ㄒ->B)
-    - xform/q/A/
-    - xform/x/B/
+    # 錨定在音節開頭才轉換，否則會連音節尾端的一聲(q)/三聲(x)
+    # 調號也一起誤轟掉（dict.yaml 的多音節詞是用空格分隔每個音節的）
+    - xform/(^| )q/$1A/
+    - xform/(^| )x/$1B/
 
     # 2. 基本注音轉換 (🌟 修復組合鼻音韻母)
     - xform/yong/vP/    # ㄩㄥ (用)
