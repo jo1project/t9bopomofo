@@ -101,12 +101,9 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func reloadCandidates() {
-        // ponytail: temporary diagnostic tag for the "preedit shows raw digits"
-        // report — remove once usingRime state is confirmed from a screenshot.
-        let debugTag = engine.usingRime ? "[R]" : "[S]"
         candidateBar.setCandidates(
             engine.candidates,
-            preedit: debugTag + engine.preeditDisplay,
+            preedit: engine.preeditDisplay,
             status: engine.isComposing ? "" : engine.predictionStatus
         )
         candidatePanel?.setCandidates(engine.candidates)
