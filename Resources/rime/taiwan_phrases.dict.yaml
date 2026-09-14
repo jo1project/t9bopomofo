@@ -4,7 +4,7 @@
 
 ---
 name: taiwan_phrases
-version: "2026.08.16"
+version: "2026.09.14"
 sort: by_weight
 ...
 
@@ -475,3 +475,57 @@ hot7	hot7	5000
 黑料	hei1 liao4	6500
 點點心	dian3 dian3 xin1	7000
 鼎泰豐	ding3 tai4 feng1	11000
+
+# 常用詞補充
+懷疑	huai2 yi2	16000
+句號	ju4 hao4	14000
+逗號	dou4 hao4	14000
+驚嘆號	jing1 tan4 hao4	12000
+問號	wen4 hao4	14000
+冒號	mao4 hao4	11000
+頓號	dun4 hao4	10000
+括號	kuo4 hao4	12000
+引號	yin3 hao4	11000
+破折號	po4 zhe2 hao4	9000
+刪節號	shan1 jie2 hao4	7000
+省略號	sheng3 lue4 hao4	12000
+分號	fen1 hao4	11000
+可能	ke3 neng2	18000
+或許	huo4 xu3	14000
+大概	da4 gai4	16000
+也許	ye3 xu3	15000
+似乎	si4 hu1	13000
+恐怕	kong3 pa4	12000
+難道	nan2 dao4	13000
+究竟	jiu1 jing4	12000
+到底	dao4 di3	16000
+根本	gen1 ben3	15000
+簡直	jian3 zhi2	13000
+果然	guo3 ran2	13000
+居然	ju1 ran2	13000
+竟然	jing4 ran2	14000
+突然	tu1 ran2	16000
+忽然	hu1 ran2	12000
+偶然	ou3 ran2	11000
+必須	bi4 xu1	16000
+應當	ying1 dang1	12000
+寧可	ning4 ke3	11000
+與其	yu3 qi2	12000
+不如	bu4 ru2	14000
+尤其	you2 qi2	13000
+何況	he2 kuang4	12000
+何必	he2 bi4	11000
+何時	he2 shi2	12000
+何地	he2 di4	10000
+何人	he2 ren2	10000
+為何	wei4 he2	13000
+為什麼	wei4 shen2 me5	17000
+怎麼	zen3 me5	18000
+怎樣	zen3 yang4	14000
+如何	ru2 he2	15000
+哪裡	na3 li3	15000
+那裡	na4 li3	14000
+這裡	zhe4 li3	17000
+哪兒	na3 er2	11000
+那兒	na4 er2	11000
+這兒	zhe4 er2	12000

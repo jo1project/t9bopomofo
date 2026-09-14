@@ -231,9 +231,14 @@ final class InputEngine: ObservableObject {
                 if !text.isEmpty, !self.isComposing {
                     self.lastPredictionContext = text
                     self.applyLocalPredictions(after: text)
-                    // ponytail: trigger LLM, check permission inside scheduleLLMPredictions
-                    await MainActor.run {
-                        self.scheduleLLMPredictions(after: text, hasNetworkAccess: true)
+                    // ponytail: delay LLM to avoid typing lag
+                    let context = text
+                    Task { [weak self] in
+                        try? await Task.sleep(for: .milliseconds(500))
+                        guard let self, !Task.isCancelled else { return }
+                        await MainActor.run {
+                            self.scheduleLLMPredictions(after: context, hasNetworkAccess: true)
+                        }
                     }
                 }
             }
