@@ -223,22 +223,20 @@ final class InputEngine: ObservableObject {
                 lastCommitted = text
             }
 
-            // Update candidates asynchronously
-            updateTask?.cancel()
-            updateTask = Task { [weak self] in
-                await self?.syncFromRimeAsync()
-                guard let self = self, !Task.isCancelled else { return }
-                if !text.isEmpty, !self.isComposing {
-                    self.lastPredictionContext = text
-                    self.applyLocalPredictions(after: text)
-                    // ponytail: delay LLM to avoid typing lag
-                    let context = text
-                    Task { [weak self] in
-                        try? await Task.sleep(for: .milliseconds(500))
-                        guard let self, !Task.isCancelled else { return }
-                        await MainActor.run {
-                            self.scheduleLLMPredictions(after: context, hasNetworkAccess: true)
-                        }
+            // ponytail: sync UI immediately to clear preedit
+            syncFromRime()
+
+            // Trigger predictions only if composition finished
+            if !text.isEmpty, !isComposing {
+                lastPredictionContext = text
+                applyLocalPredictions(after: text)
+                // ponytail: delay LLM to avoid typing lag
+                updateTask?.cancel()
+                updateTask = Task { [weak self] in
+                    try? await Task.sleep(for: .milliseconds(500))
+                    guard let self, !Task.isCancelled else { return }
+                    await MainActor.run {
+                        self.scheduleLLMPredictions(after: text, hasNetworkAccess: true)
                     }
                 }
             }
