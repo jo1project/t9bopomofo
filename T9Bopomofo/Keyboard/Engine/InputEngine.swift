@@ -216,8 +216,9 @@ final class InputEngine: ObservableObject {
                 return candidates.firstIndex(where: { $0.id == candidate.id }) ?? 0
             }()
 
-            // Synchronous for immediate text insertion
-            let text = rime.selectCandidate(at: idx)
+            // Synchronous, but drains the queue first so a pending tone/digit
+            // key (still in-flight via processKeyAsync) lands before selection.
+            let text = rime.selectCandidateSync(at: idx)
             if !text.isEmpty {
                 userLexicon.recordCommit(text, previous: lastCommitted.isEmpty ? nil : lastCommitted)
                 lastCommitted = text

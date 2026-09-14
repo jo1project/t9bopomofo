@@ -136,6 +136,17 @@ final class RimeEngine {
         return consumeCommit()
     }
 
+    /// Runs selection on `queue`, blocking the caller until any in-flight key
+    /// (tapT9Key/tapTone, dispatched via processKeyAsync) drains first. Without
+    /// this, a fast tap-after-tone-key can select before the tone reaches Rime,
+    /// leaving the tone stranded as a stray new composition after the commit.
+    @discardableResult
+    func selectCandidateSync(at index: Int) -> String {
+        queue.sync { [weak self] in
+            self?.selectCandidate(at: index) ?? ""
+        }
+    }
+
     func consumeCommit() -> String {
         // NOTE: caller must hold lock
         guard isReady, let api else { return "" }
@@ -173,15 +184,6 @@ final class RimeEngine {
             queue.async { [weak self] in
                 self?.clearComposition()
                 continuation.resume()
-            }
-        }
-    }
-
-    func selectCandidateAsync(at index: Int) async -> String {
-        await withCheckedContinuation { continuation in
-            queue.async { [weak self] in
-                let result = self?.selectCandidate(at: index) ?? ""
-                continuation.resume(returning: result)
             }
         }
     }
