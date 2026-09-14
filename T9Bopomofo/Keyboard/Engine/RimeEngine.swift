@@ -64,10 +64,14 @@ final class RimeEngine {
 
         // Only run maintenance and block when files were synced or updated.
         // On normal launches, schemas and binaries are already compiled in user/build.
+        // Always join (not gated on start_maintenance's return value): librime's own
+        // dirty-check is independent of our didSync marker, and skipping the join
+        // when it returns 0 can leave select_schema() running against an unbuilt
+        // prism after we've just wiped user/build — showing raw digits instead of
+        // zhuyin in preedit since script_translator has nothing to translate with.
         if roots.didSync {
-            if api.pointee.start_maintenance(1) != 0 {
-                api.pointee.join_maintenance_thread()
-            }
+            api.pointee.start_maintenance(1)
+            api.pointee.join_maintenance_thread()
         }
 
         session = api.pointee.create_session()
