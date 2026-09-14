@@ -10,8 +10,6 @@ sort: by_weight
 use_preset_vocabulary: true
 max_phrase_length: 8
 min_phrase_weight: 100
-import_tables:
-  - taiwan_phrases
 ...
 
 〇	liPw
