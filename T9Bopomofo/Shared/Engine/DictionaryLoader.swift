@@ -65,6 +65,14 @@ final class DictionaryLoader: @unchecked Sendable {
     }
 
     /// All lexicon hits whose T9 exactly equals a prefix of `digits` (Rime partial spans).
+    ///
+    /// Does NOT truncate per-span hits: many zhuyin symbols share a T9 key (e.g. ㄔㄘㄣㄧ
+    /// all on key 6), so a single digit can have hundreds of same-digit, different-tone
+    /// homophones. Truncating here by raw weight (tone-agnostic) before the caller applies
+    /// tone scoring silently drops the character the user actually wants whenever it isn't
+    /// among the handful of highest raw-frequency homophones — which also makes tone
+    /// selection look like it does nothing, since the correct tone's candidate was already
+    /// cut. The real cutoff (`candidateLimit`) is applied later, after tone scoring.
     func prefixSpans(of digits: String, maxSpan: Int = 12) -> [(span: String, entries: [LexiconEntry])] {
         guard !digits.isEmpty else { return [] }
         var result: [(String, [LexiconEntry])] = []
@@ -73,7 +81,7 @@ final class DictionaryLoader: @unchecked Sendable {
             let span = String(digits.prefix(len))
             let hits = exact(digits: span)
             if !hits.isEmpty {
-                result.append((span, Array(hits.prefix(6))))
+                result.append((span, hits))
             }
         }
         return result

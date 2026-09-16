@@ -331,6 +331,45 @@ def test_danshi_beats_chop():
     print("danshi_beats_chop OK", phrase_score, ">", best_chop)
 
 
+def test_chi_reachable_with_tone():
+    """吃 (ㄔ, tone1) must not be silently dropped by a pre-tone-scoring truncation.
+
+    Key 6 covers ㄔㄘㄣㄧ, so digit "6" alone has 670+ same-digit homophones
+    (mostly totally unrelated ㄧ-reading chars like 一/衣/億/益). A cap applied
+    before tone scoring (the old prefixSpans/nBest `.prefix(6)` / `.prefix(4)`)
+    drops 吃 outright since it isn't top-6 by raw weight — and once dropped,
+    no tone key press can bring it back. This checks 吃 survives an *unbounded*
+    exact() lookup, and that pressing tone1 promotes it above nearby-weight
+    wrong-tone homophones (益/溢), matching InputEngine's toneScore formula.
+    """
+    entries = load_all()
+    digits = encode_reading("ㄔ")
+    assert digits == "6"
+
+    same_digit = [(w, r, wt) for w, r, t9, wt in entries if t9 == digits]
+    words = {w for w, r, wt in same_digit}
+    assert "吃" in words, "吃 missing from unbounded digit-6 lookup (regression!)"
+
+    def tone_score(entry_tone: str, wanted: str, weight: int) -> float:
+        if entry_tone == "-":
+            return float(weight)
+        return float(weight) + (12_000 if entry_tone == wanted else -18_000)
+
+    best = {}
+    for w, r, wt in same_digit:
+        if w not in best or wt > best[w][1]:
+            _, t = encode_syllable(r)
+            best[w] = (t or "-", wt)
+
+    chi_tone, chi_wt = best["吃"]
+    chi_score = tone_score(chi_tone, "q", chi_wt)
+    for w in ("益", "溢"):
+        assert w in best, f"{w} missing (expected as a nearby-weight wrong-tone neighbor)"
+        t, wt = best[w]
+        assert tone_score(t, "q", wt) < chi_score, (w, t, wt, tone_score(t, "q", wt), chi_score)
+    print("chi_reachable_with_tone OK", chi_score)
+
+
 def main() -> int:
     test_encode_samples()
     test_dict_contains_targets()
@@ -341,6 +380,7 @@ def main() -> int:
     test_haoxiang_beats_haolashi()
     test_you_beats_rao()
     test_danshi_beats_chop()
+    test_chi_reachable_with_tone()
     print("ALL PASSED")
     return 0
 

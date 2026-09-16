@@ -41,8 +41,11 @@ enum PhraseSegmenter {
                 let slice = String(rest.prefix(len))
                 let exact = lexicon.exact(digits: slice)
                 if !exact.isEmpty {
-                    // Keep top few homophones at this span
-                    hits.append(contentsOf: exact.prefix(4))
+                    // Same T9 key covers several zhuyin symbols (e.g. ㄔㄘㄣㄧ on key 6), so a
+                    // short span can have hundreds of same-digit, different-tone homophones.
+                    // Keep a generous slice by raw weight — tone scoring is applied later by
+                    // the caller and can't rescue a homophone that got cut here first.
+                    hits.append(contentsOf: exact.prefix(60))
                 }
             }
             // Dedup by word+reading keep highest weight
