@@ -300,7 +300,13 @@ final class InputEngine: ObservableObject {
         for (pi, path) in PhraseSegmenter.nBest(digits: digits, lexicon: lexicon, limit: 8).enumerated() {
             let toneBonus = toneScore(tones: path.tones)
             let userBoost = userLexicon.boost(for: path.text, previous: lastCommitted.isEmpty ? nil : lastCommitted)
-            let segPenalty = Double(max(0, path.entries.count - 1)) * 200
+            // Proportional (not flat) penalty: libchewing single-char weights can be ~10x a real
+            // phrase's weight, so a flat penalty is swamped and a chop of two common chars
+            // (e.g. 但+試) out-ranks the real phrase (但是). Scale the penalty to the path's own
+            // weight so it stays meaningful regardless of the corpus's weight range.
+            // ponytail: 0.75 is a tuned constant, not a language model — revisit if mis-ranks show up.
+            let segCount = Double(max(0, path.entries.count - 1))
+            let segPenalty = Double(path.weight) * segCount * 0.75
             items.append(T9SortFilter.Item(
                 candidate: Candidate(
                     id: "seg-\(pi)-\(path.text)",

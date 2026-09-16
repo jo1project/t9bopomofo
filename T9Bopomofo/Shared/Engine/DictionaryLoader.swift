@@ -4,6 +4,8 @@ final class DictionaryLoader: @unchecked Sendable {
     private(set) var entries: [LexiconEntry] = []
     /// Prefix index: T9 digits → entry indices
     private var prefixBuckets: [String: [Int]] = [:]
+    /// Full T9 string → entry indices, for O(1) exact() lookups.
+    private var exactIndex: [String: [Int]] = [:]
 
     func load(from urls: [URL]) throws {
         var all: [LexiconEntry] = []
@@ -78,7 +80,8 @@ final class DictionaryLoader: @unchecked Sendable {
     }
 
     func exact(digits: String) -> [LexiconEntry] {
-        entries.filter { $0.t9 == digits }.sorted { $0.weight > $1.weight }
+        guard let idxs = exactIndex[digits] else { return [] }
+        return idxs.map { entries[$0] }.sorted { $0.weight > $1.weight }
     }
 
     // MARK: - Parse
@@ -130,6 +133,7 @@ final class DictionaryLoader: @unchecked Sendable {
 
     private func rebuildIndex() {
         prefixBuckets.removeAll(keepingCapacity: true)
+        exactIndex.removeAll(keepingCapacity: true)
         for (idx, e) in entries.enumerated() {
             let p = String(e.t9.prefix(min(4, e.t9.count)))
             prefixBuckets[p, default: []].append(idx)
@@ -139,6 +143,7 @@ final class DictionaryLoader: @unchecked Sendable {
             }
             let p1 = String(e.t9.prefix(1))
             prefixBuckets[p1, default: []].append(idx)
+            exactIndex[e.t9, default: []].append(idx)
         }
     }
 }

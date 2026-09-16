@@ -296,6 +296,41 @@ def test_you_beats_rao():
     print("you_beats_you4 OK", cands[:3], "with tone", cands3[:3])
 
 
+def test_danshi_beats_chop():
+    """但是 (a real phrase) must outrank a 但+事/但+試 chop of two common single chars.
+
+    libchewing single-char weights (word.csv) are on a much bigger scale than
+    phrase weights (tsi.csv) — mirrors InputEngine's proportional segPenalty
+    (path.weight * segCount * 0.75) instead of the old flat -200.
+    """
+    entries = load_all()
+    digits = encode_reading("ㄉㄢˋ ㄕˋ")
+    assert digits == "139"
+
+    best_weight: dict[str, int] = {}
+    for w, r, t9, wt in entries:
+        if t9 == digits:
+            best_weight[w] = max(wt, best_weight.get(w, 0))
+    assert "但是" in best_weight, "但是 missing from dict"
+    phrase_score = best_weight["但是"]
+
+    def entries_for(t9: str) -> list[tuple[str, int]]:
+        return [(w, wt) for w, r, t, wt in entries if t == t9]
+
+    best_chop = -1.0
+    for split in range(1, len(digits)):
+        left, right = digits[:split], digits[split:]
+        for _, lw in entries_for(left):
+            for _, rw in entries_for(right):
+                chop_weight = min(lw, rw)
+                chop_score = chop_weight - chop_weight * 1 * 0.75
+                best_chop = max(best_chop, chop_score)
+
+    assert best_chop >= 0, "no chop candidates found"
+    assert phrase_score > best_chop, (phrase_score, best_chop)
+    print("danshi_beats_chop OK", phrase_score, ">", best_chop)
+
+
 def main() -> int:
     test_encode_samples()
     test_dict_contains_targets()
@@ -305,6 +340,7 @@ def main() -> int:
     test_bushixing_vs_buxing()
     test_haoxiang_beats_haolashi()
     test_you_beats_rao()
+    test_danshi_beats_chop()
     print("ALL PASSED")
     return 0
 
