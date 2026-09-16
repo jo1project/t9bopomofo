@@ -27,11 +27,6 @@ workflows:
       - name: Install XcodeGen
         script: |
           brew install xcodegen
-      - name: Download librime + models
-        script: |
-          chmod +x Scripts/download-frameworks.sh Scripts/download-models.sh
-          ./Scripts/download-frameworks.sh
-          ./Scripts/download-models.sh
       - name: Generate Xcode project
         script: |
           xcodegen generate

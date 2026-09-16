@@ -1,4 +1,4 @@
-.PHONY: project test models
+.PHONY: project test dict
 
 project:
 	xcodegen generate
@@ -6,5 +6,5 @@ project:
 test:
 	python3 Tests/test_engine_ref.py
 
-models:
-	./Scripts/download-models.sh
+dict:
+	python3 Scripts/build-chewing-dict.py

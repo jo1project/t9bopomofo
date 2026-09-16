@@ -2,13 +2,15 @@
 """Reference tests for T9 encoding / fuzzy / clear-on-symbol (mirrors Swift engine)."""
 from __future__ import annotations
 
-import re
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-DICT = ROOT / "Resources" / "rime"
+DICT = ROOT / "Resources" / "chewing"
+DICT_FILES = ("taiwan_phrases.dict.yaml", "chewing_base.dict.yaml")
 
+# Mirrors T9KeyMap.tokenToKey (ASCII letters kept for literal-spelled loanwords
+# like "Dcard" / "PTT"; zhuyin symbols for real syllables).
 TOKEN_TO_KEY = {
     "b": "1", "d": "1", "a": "1",
     "g": "2", "j": "2", "I": "2",
@@ -21,7 +23,21 @@ TOKEN_TO_KEY = {
     "S": "9", "s": "9", "O": "9", "u": "9",
     "f": "0", "l": "0", "E": "0",
     "r": "v", "P": "v", "v": "v",
+    "ㄅ": "1", "ㄉ": "1", "ㄚ": "1",
+    "ㄍ": "2", "ㄐ": "2", "ㄞ": "2",
+    "ㄓ": "3", "ㄗ": "3", "ㄢ": "3", "ㄦ": "3",
+    "ㄆ": "4", "ㄊ": "4", "ㄛ": "4",
+    "ㄎ": "5", "ㄑ": "5", "ㄟ": "5",
+    "ㄔ": "6", "ㄘ": "6", "ㄣ": "6", "ㄧ": "6",
+    "ㄇ": "7", "ㄋ": "7", "ㄜ": "7",
+    "ㄏ": "8", "ㄒ": "8", "ㄠ": "8", "ㄡ": "8",
+    "ㄕ": "9", "ㄙ": "9", "ㄤ": "9", "ㄨ": "9",
+    "ㄈ": "0", "ㄌ": "0", "ㄝ": "0",
+    "ㄖ": "v", "ㄥ": "v", "ㄩ": "v",
 }
+
+TONE_MARKS = {"ˊ": "w", "ˇ": "x", "ˋ": "y"}
+BOPOMOFO_BLOCK = range(0x3105, 0x3130)
 
 NEIGHBORS = {
     "1": list("24"), "2": list("135"), "3": list("26"),
@@ -32,64 +48,26 @@ NEIGHBORS = {
 
 
 def encode_syllable(raw: str) -> tuple[str, str | None]:
-    s = raw.strip().lower()
-    tone = None
-    if s and s[-1] in "12345":
-        tone = {"1": "q", "2": "w", "3": "x", "4": "y", "5": None}[s[-1]]
-        s = s[:-1]
+    chars = list(raw.strip())
+    if not chars:
+        return "", None
 
-    repls = [
-        ("yong", "vP"), ("iong", "vP"), ("weng", "uP"), ("ong", "uP"), ("ing", "iP"),
-    ]
-    for a, b in repls:
-        s = s.replace(a, b)
+    tone: str | None = None
+    if chars and chars[-1] in TONE_MARKS:
+        tone = TONE_MARKS[chars[-1]]
+        chars.pop()
+    elif chars and chars[-1] == "˙":
+        chars.pop()  # neutral tone: no anchor
 
-    if s.startswith("yu"):
-        s = "v" + s[2:]
-    if s.startswith("yi"):
-        s = "i" + s[2:]
-    elif s.startswith("y"):
-        s = "i" + s[1:]
-    if s.startswith("wu"):
-        s = "u" + s[2:]
-    elif s.startswith("w"):
-        s = "u" + s[1:]
+    if tone is None and all(ord(c) in BOPOMOFO_BLOCK for c in chars):
+        tone = "q"  # bare zhuyin syllable = tone 1
 
-    s = s.replace("iu", "iou").replace("ui", "uei")
-    for initial in ("j", "A", "B"):
-        if s.startswith(initial + "u"):
-            s = initial + "v" + s[len(initial) + 1 :]
-
-    # ([iuv])n → $1en
-    s = re.sub(r"([iuv])n", r"\1en", s)
-
-    for a, b in [("zhi", "Z"), ("chi", "C"), ("shi", "S")]:
-        s = s.replace(a, b)
-    if s.startswith("zh"):
-        s = "Z" + s[2:]
-    if s.startswith("ch"):
-        s = "C" + s[2:]
-    if s.startswith("sh"):
-        s = "S" + s[2:]
-    for ch in "zcsr":
-        if s == ch + "i":
-            s = ch
-
-    for a, b in [
-        ("ai", "I"), ("ei", "J"), ("ao", "K"), ("ou", "L"),
-        ("ang", "O"), ("eng", "P"), ("an", "M"), ("en", "N"),
-        ("er", "R"), ("eh", "E"),
-    ]:
-        s = s.replace(a, b)
-    s = s.replace("ie", "iE").replace("ve", "vE")
-    s = s.replace("q", "A").replace("x", "B")
-
-    digits = "".join(TOKEN_TO_KEY[c] for c in s if c in TOKEN_TO_KEY)
+    digits = "".join(TOKEN_TO_KEY[c] for c in chars if c in TOKEN_TO_KEY)
     return digits, tone
 
 
 def encode_reading(reading: str) -> str:
-    parts = re.split(r"[\s']+", reading.strip())
+    parts = reading.strip().split(" ")
     return "".join(encode_syllable(p)[0] for p in parts if p)
 
 
@@ -112,45 +90,46 @@ def parse_dict(path: Path) -> list[tuple[str, str, str, int]]:
         w = 1000
         if len(cols) >= 3:
             t = cols[2].strip()
-            if t.endswith("%"):
-                try:
-                    w = int(float(t[:-1]) * 100)
-                except ValueError:
-                    w = 1000
-            else:
-                try:
-                    w = int(float(t))
-                except ValueError:
-                    w = 1000
+            try:
+                w = int(float(t))
+            except ValueError:
+                w = 1000
         t9 = encode_reading(reading)
         if t9:
             out.append((word, reading, t9, w))
     return out
 
 
+def load_all() -> list[tuple[str, str, str, int]]:
+    entries: list[tuple[str, str, str, int]] = []
+    for name in DICT_FILES:
+        entries.extend(parse_dict(DICT / name))
+    return entries
+
+
 def test_encode_samples():
-    # 早 zao3 → z + ao → z + K → 3 + 8
-    assert encode_syllable("zao3")[0] == "38", encode_syllable("zao3")
-    # 餐 can1 → c + an → c + M → 6 + 3
-    assert encode_syllable("can1")[0] == "63", encode_syllable("can1")
-    # 拉 la1 → l + a → 0 + 1
-    assert encode_syllable("la1")[0] == "01", encode_syllable("la1")
-    # 亞 ya4 → i + a (y→i) → 6 + 1
-    assert encode_syllable("ya4")[0] == "61", encode_syllable("ya4")
-    print("encode_samples OK", encode_reading("zao3 can1"), encode_reading("la1 ya4"))
+    # 早 ㄗㄠˇ → z(3) + ao(8) = 38, tone 3 → x
+    assert encode_syllable("ㄗㄠˇ") == ("38", "x"), encode_syllable("ㄗㄠˇ")
+    # 餐 ㄘㄢ (no mark = tone1) → c(6) + an(3) = 63, tone q
+    assert encode_syllable("ㄘㄢ") == ("63", "q"), encode_syllable("ㄘㄢ")
+    # 拉 ㄌㄚ → l(0) + a(1) = 01, tone q
+    assert encode_syllable("ㄌㄚ") == ("01", "q"), encode_syllable("ㄌㄚ")
+    # 亞 ㄧㄚˋ → i(6) + a(1) = 61, tone 4 → y
+    assert encode_syllable("ㄧㄚˋ") == ("61", "y"), encode_syllable("ㄧㄚˋ")
+    # Literal ASCII spelling (loanwords) passes through unchanged, no tone.
+    assert encode_syllable("card") == ("61v1", None), encode_syllable("card")
+    print("encode_samples OK")
 
 
 def test_dict_contains_targets():
-    entries = []
-    for name in ("taiwan_phrases.dict.yaml", "bopomofo_t9.dict.yaml"):
-        entries.extend(parse_dict(DICT / name))
-    by_word = {}
+    entries = load_all()
+    by_word: dict[str, list[tuple[str, str, int]]] = {}
     for w, r, t9, weight in entries:
         by_word.setdefault(w, []).append((r, t9, weight))
     assert "早餐" in by_word, "missing 早餐"
     assert "拉亞" in by_word, "missing 拉亞"
-    breakfast = encode_reading("zao3 can1")
-    laya = encode_reading("la1 ya4")
+    breakfast = encode_reading("ㄗㄠˇ ㄘㄢ")
+    laya = encode_reading("ㄌㄚ ㄧㄚˋ")
     assert any(t9 == breakfast for _, t9, _ in by_word["早餐"]), by_word["早餐"]
     assert any(t9 == laya for _, t9, _ in by_word["拉亞"]), by_word["拉亞"]
     print("dict targets OK", breakfast, laya)
@@ -158,15 +137,13 @@ def test_dict_contains_targets():
 
 def test_fuzzy_neighbor_and_missing():
     entries = parse_dict(DICT / "taiwan_phrases.dict.yaml")
-    laya = encode_reading("la1 ya4")  # 0161
-    # neighbor: change one key
+    laya = encode_reading("ㄌㄚ ㄧㄚˋ")  # 0161
     neigh = list(laya)
     neigh[0] = NEIGHBORS[neigh[0]][0]
-    mutated = "".join(neigh)
     exact = {t9 for _, _, t9, _ in entries}
     assert laya in exact
     # missing key: drop one digit from correct code — fuzzy should recover via insertion probe
-    missing = laya[:2] + laya[3:]  # drop one
+    missing = laya[:2] + laya[3:]
     probes = []
     keys = list("0123456789v")
     chars = list(missing)
@@ -205,7 +182,7 @@ def test_clear_on_symbol_behavior():
 def test_success_phrase():
     entries = parse_dict(DICT / "taiwan_phrases.dict.yaml")
     target = "早餐要不要吃拉亞"
-    reading = "zao3 can1 yao4 bu4 yao4 chi1 la1 ya4"
+    reading = "ㄗㄠˇ ㄘㄢ ㄧㄠˋ ㄅㄨˋ ㄧㄠˋ ㄔ ㄌㄚ ㄧㄚˋ"
     t9 = encode_reading(reading)
     hits = [e for e in entries if e[0] == target]
     assert hits, "phrase missing from taiwan_phrases"
@@ -215,18 +192,15 @@ def test_success_phrase():
 
 def test_bushixing_vs_buxing():
     """不是不行 vs 不是不幸 share T9; tone-2 on last syllable must prefer 行."""
-    entries = []
-    for name in ("taiwan_phrases.dict.yaml", "bopomofo_t9.dict.yaml"):
-        entries.extend(parse_dict(DICT / name))
-    digits = encode_reading("bu2 shi4 bu4 xing2")
-    digits_xing4 = encode_reading("bu2 shi4 bu2 xing4")
+    entries = load_all()
+    digits = encode_reading("ㄅㄨˊ ㄕˋ ㄅㄨˋ ㄒㄧㄥˊ")
+    digits_xing4 = encode_reading("ㄅㄨˊ ㄕˋ ㄅㄨˊ ㄒㄧㄥˋ")
     assert digits == digits_xing4, (digits, digits_xing4)
 
     by_word = {w: (r, t9, wt) for w, r, t9, wt in entries if w in ("不是不行", "不是不幸", "不行", "不幸")}
     assert "不是不行" in by_word, by_word.keys()
     assert "不行" in by_word
 
-    # Simulate ranking: exact phrase + last tone w (2nd)
     def tone_bonus(tones: str, wanted: str) -> float:
         have = [c for c in tones if c != "-"]
         bonus = 0.0
@@ -238,10 +212,9 @@ def test_bushixing_vs_buxing():
             bonus += 900 if w == h else -700
         return bonus
 
-    # Build tones from readings
     def tones_of(reading: str) -> str:
         out = ""
-        for part in reading.split():
+        for part in reading.split(" "):
             _, t = encode_syllable(part)
             out += t or "-"
         return out
@@ -256,7 +229,6 @@ def test_bushixing_vs_buxing():
     assert cands, "no candidates"
     top = [w for _, w, _ in cands[:5]]
     assert "不是不行" in top or top[0].endswith("行"), top
-    # 不幸 / 不是不幸 must rank below 行 variants when 2nd tone applied
     best_xing = max((s for s, w, _ in cands if "行" in w), default=-1e9)
     best_xing4 = max((s for s, w, _ in cands if "幸" in w), default=-1e9)
     assert best_xing > best_xing4, (best_xing, best_xing4, top)
@@ -264,19 +236,15 @@ def test_bushixing_vs_buxing():
 
 
 def test_haoxiang_beats_haolashi():
-    """88869 must rank 好像 above 號臘食 (臘xi1 chop)."""
-    entries = []
-    for name in ("taiwan_phrases.dict.yaml", "bopomofo_t9.dict.yaml"):
-        entries.extend(parse_dict(DICT / name))
-    digits = encode_reading("hao3 xiang4")
+    """88869 must rank 好像 above a fake multi-segment chop path."""
+    entries = load_all()
+    digits = encode_reading("ㄏㄠˇ ㄒㄧㄤˋ")
     assert digits == "88869"
 
-    # Score like InputEngine: whole match +20k; multi-seg penalty 8k each extra
     scored = []
     for w, r, t9, wt in entries:
         if t9 == digits:
-            scored.append((wt + 20_000 + 15_000, w))  # phrase + exactLen
-    # fake chop path
+            scored.append((wt + 20_000 + 15_000, w))
     scored.append((9900 + 30 * 3 - 8_000 * 2, "號臘食"))
     scored.sort(reverse=True)
     assert scored[0][1] == "好像", scored[:5]
@@ -284,11 +252,9 @@ def test_haoxiang_beats_haolashi():
 
 
 def test_you_beats_rao():
-    """有 you3 must beat 擾 you4 on 68; third tone makes it decisive."""
-    entries = []
-    for name in ("taiwan_phrases.dict.yaml", "bopomofo_t9.dict.yaml"):
-        entries.extend(parse_dict(DICT / name))
-    digits = encode_reading("you3")
+    """有 you3 must beat 又/右 you4 on 68; third tone makes it decisive."""
+    entries = load_all()
+    digits = encode_reading("ㄧㄡˇ")
     assert digits == "68"
 
     def score(wt, tones, wanted=""):
@@ -305,12 +271,11 @@ def test_you_beats_rao():
 
     def tones_of(reading: str) -> str:
         out = ""
-        for part in reading.split():
+        for part in reading.split(" "):
             _, t = encode_syllable(part)
             out += t or "-"
         return out
 
-    # without tone
     cands = []
     for w, r, t9, wt in entries:
         if t9 != digits:
@@ -319,7 +284,6 @@ def test_you_beats_rao():
     cands.sort(reverse=True)
     assert cands[0][1] == "有", cands[:8]
 
-    # with 3rd tone
     cands3 = []
     for w, r, t9, wt in entries:
         if t9 != digits:
@@ -327,7 +291,6 @@ def test_you_beats_rao():
         cands3.append((score(wt, tones_of(r), "x"), w, r))
     cands3.sort(reverse=True)
     assert cands3[0][1] == "有", cands3[:8]
-    # 又/右 (you4) must be penalized with 3rd tone
     you4 = [c for c in cands3 if c[1] in ("又", "右")]
     assert you4 and you4[0][0] < cands3[0][0]
     print("you_beats_you4 OK", cands[:3], "with tone", cands3[:3])

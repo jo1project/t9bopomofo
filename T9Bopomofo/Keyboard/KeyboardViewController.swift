@@ -302,7 +302,7 @@ final class KeyboardViewController: UIInputViewController {
         case .tone(let ch):
             engine.tapTone(ch)
         case .toneNeutral:
-            // Soft tone: omit tone marker (Rime treats missing tone as 輕聲).
+            // Soft tone: omit tone marker (missing tone = 輕聲).
             break
         case .exact(let token, _):
             engine.tapExactToken(token)

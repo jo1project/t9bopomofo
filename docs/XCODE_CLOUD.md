@@ -32,8 +32,6 @@ Apple 目前多數情況：**第一個 workflow 要在 Xcode 裡建立一次**�
 ```bash
 git clone <repo> && cd t9bopomofo
 git checkout cursor/app-polish-sponsor-99f2
-./Scripts/download-frameworks.sh
-./Scripts/download-models.sh
 brew install xcodegen && xcodegen generate
 open T9Bopomofo.xcodeproj
 ```
@@ -47,7 +45,7 @@ open T9Bopomofo.xcodeproj
 5. Action 選 **Archive** → 目的選 **TestFlight Internal Testing**
 6. Start Build
 
-Repo 已有 `ci_scripts/ci_post_clone.sh`：Cloud 會自動 `xcodegen` + 下載 frameworks。
+Repo 已有 `ci_scripts/ci_post_clone.sh`：Cloud 會自動跑 `xcodegen`。
 
 ### 建好之後（不用 Mac）
 

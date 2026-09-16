@@ -3,10 +3,6 @@ DerivedData/
 build/
 *.xcuserstate
 xcuserdata/
-*.gram
-essay.txt
-Frameworks/
-*.xcframework
 .SwiftPM/
 .swiftpm/
 __pycache__/

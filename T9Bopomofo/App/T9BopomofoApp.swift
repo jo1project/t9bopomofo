@@ -47,7 +47,7 @@ struct SetupView: View {
 
                     Group {
                         Text("功能摘要").font(.headline)
-                        Text("• 選詞：librime + octagram；候選 ▼ 可展開")
+                        Text("• 選詞：libchewing 詞庫 + 自學排序；候選 ▼ 可展開")
                         Text("• 長按注音／標點：在原地左右滑即可切換選項")
                         Text("• 臨近鍵容錯：預設開啟；贊助後可於「設定」關閉")
                         Text("• LLM 聯想：單次贊助解鎖後，於 LLM 分頁設定")

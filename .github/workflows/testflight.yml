@@ -14,12 +14,6 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
 
-      - name: Download librime + models
-        run: |
-          chmod +x Scripts/download-frameworks.sh Scripts/download-models.sh
-          ./Scripts/download-frameworks.sh
-          ./Scripts/download-models.sh
-
       - name: Generate Xcode project
         run: xcodegen generate
 

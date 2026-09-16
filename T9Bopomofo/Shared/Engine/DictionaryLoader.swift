@@ -27,8 +27,8 @@ final class DictionaryLoader: @unchecked Sendable {
 
     func loadFromBundle(bundle: Bundle = .main) throws {
         var urls: [URL] = []
-        let names = ["taiwan_phrases.dict", "bopomofo_t9.dict"]
-        let subdirs: [String?] = ["rime", nil]
+        let names = ["taiwan_phrases.dict", "chewing_base.dict"]
+        let subdirs: [String?] = ["chewing", nil]
         for name in names {
             for sub in subdirs {
                 if let url = bundle.url(forResource: name, withExtension: "yaml", subdirectory: sub) {

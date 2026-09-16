@@ -1,17 +1,14 @@
 # Jo一個T9注音（iOS）
 
-鍵盤 UI 自研；**智慧選詞應對齊 Hamster／Rime**，不是逐字調權重。
+鍵盤 UI + 選詞引擎皆自研 Swift（無 Rime／librime 依賴）。
 
 詳見 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。
 
-## 為什麼之前像「遇到一個字改一個字」
+## 引擎
 
-Hamster 的聰明來自 **librime** + 你的 schema／`rime.lua`（`t9_sort_filter`）／`essay`／`.gram`。  
-本專案一開始用的是簡化 Swift T9，所以只能靠加詞補洞。現在已接上 **librime + octagram**：
-
-1. 鍵盤 UI 自研；選詞走 librime（[fulanto/LibrimeKit](https://github.com/fulanto/LibrimeKit) 2.9.0，含 lua／octagram）
-2. 方案／詞庫／`rime.lua` + `zh-hant-t-essay-bgw.gram` 上下文重排
-3. Rime 啟動失敗時仍回退到 Swift T9
+1. 鍵盤 UI 自研；選詞走純 Swift T9 引擎（`InputEngine` + `DictionaryLoader`）
+2. 詞庫底：[libchewing-data](https://github.com/chewing/libchewing-data)（`word.csv` + `tsi.csv`）+ 手工維護的台灣用語（`taiwan_phrases.dict.yaml`）
+3. 排序：`T9SortFilter`（覆蓋長度 + 聲調錨點）疊加 `UserLexicon` 使用者自學（詞頻 + bigram，iCloud 備份）
 
 ## 行為（產品規則）
 
@@ -36,10 +33,14 @@ GitHub Actions 可打 unsigned IPA；正式簽名請用 Xcode Archive。
 
 ```bash
 # 本機
-./Scripts/download-models.sh      # essay + gram
-./Scripts/download-frameworks.sh  # librime xcframeworks
 brew install xcodegen && xcodegen generate
 open T9Bopomofo.xcodeproj
+```
+
+## 詞庫
+
+```bash
+python3 Scripts/build-chewing-dict.py  # 重新從 libchewing-data 產生 Resources/chewing/chewing_base.dict.yaml
 ```
 
 ## 測試

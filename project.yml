@@ -15,8 +15,6 @@ settings:
     CODE_SIGN_STYLE: Automatic
     CODE_SIGNING_ALLOWED: YES
     DEVELOPMENT_TEAM: S24Z424MU4
-    CLANG_CXX_LANGUAGE_STANDARD: "c++17"
-    CLANG_CXX_LIBRARY: "libc++"
     MARKETING_VERSION: "0.3.9"
     CURRENT_PROJECT_VERSION: "65"
 
@@ -51,7 +49,7 @@ targets:
     sources:
       - path: T9Bopomofo/Keyboard
       - path: T9Bopomofo/Shared
-      - path: Resources/rime
+      - path: Resources/chewing
         buildPhase: resources
         type: folder
       - path: Resources/layouts
@@ -68,43 +66,7 @@ targets:
       SKIP_INSTALL: YES
       MARKETING_VERSION: "0.3.9"
       CURRENT_PROJECT_VERSION: "65"
-      LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks"
-      SWIFT_OBJC_BRIDGING_HEADER: T9Bopomofo/RimeBridge/T9Bopomofo-Bridging-Header.h
-      HEADER_SEARCH_PATHS: "$(inherited) $(SRCROOT)/T9Bopomofo/RimeBridge/include"
-      FRAMEWORK_SEARCH_PATHS: "$(inherited) $(SRCROOT)/Frameworks"
-      OTHER_LDFLAGS: "$(inherited) -lc++ -liconv -lz"
-      CLANG_ENABLE_MODULES: YES
     dependencies:
-      - framework: Frameworks/librime.xcframework
-        embed: false
-      - framework: Frameworks/boost_atomic.xcframework
-        embed: false
-      - framework: Frameworks/boost_filesystem.xcframework
-        embed: false
-      - framework: Frameworks/boost_locale.xcframework
-        embed: false
-      - framework: Frameworks/boost_regex.xcframework
-        embed: false
-      - framework: Frameworks/boost_system.xcframework
-        embed: false
-      - framework: Frameworks/icudata.xcframework
-        embed: false
-      - framework: Frameworks/icui18n.xcframework
-        embed: false
-      - framework: Frameworks/icuio.xcframework
-        embed: false
-      - framework: Frameworks/icuuc.xcframework
-        embed: false
-      - framework: Frameworks/libglog.xcframework
-        embed: false
-      - framework: Frameworks/libleveldb.xcframework
-        embed: false
-      - framework: Frameworks/libmarisa.xcframework
-        embed: false
-      - framework: Frameworks/libopencc.xcframework
-        embed: false
-      - framework: Frameworks/libyaml-cpp.xcframework
-        embed: false
       - sdk: CoreFoundation.framework
       - sdk: Security.framework
       - sdk: StoreKit.framework
