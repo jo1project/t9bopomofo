@@ -45,10 +45,15 @@ final class UserLexicon: @unchecked Sendable {
     }
 
     func boost(for word: String, previous: String?) -> Double {
-        var score = Double(freq[word, default: 0]) * 50
-        if let previous {
+        // libchewing's raw frequency weights routinely differ by 5,000-40,000 between
+        // homophone competitors (e.g. 業 49775 vs 易 14785) — the old +50/+120-per-pick
+        // constants (tuned for the old, much flatter rime corpus) were noise against that
+        // gap, so a picked word never visibly moved up. Scaled to the same order of
+        // magnitude as toneScore's ±12,000/-18,000 so a few picks reliably win.
+        var score = Double(freq[word, default: 0]) * 4_000
+        if let previous, !previous.isEmpty {
             let key = previous + "\u{1f}" + word
-            score += Double(bigram[key, default: 0]) * 120
+            score += Double(bigram[key, default: 0]) * 8_000
         }
         return score
     }
