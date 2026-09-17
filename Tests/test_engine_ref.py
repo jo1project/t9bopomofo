@@ -331,6 +331,73 @@ def test_danshi_beats_chop():
     print("danshi_beats_chop OK", phrase_score, ">", best_chop)
 
 
+def tone_score_by_position(tone_marks, tones: str, syllable_lengths: list[int]) -> float:
+    """Mirrors InputEngine.toneScore: match each (digits-at-press, tone) mark to the
+    candidate's own syllable boundary at that digit count, not by press order."""
+    if not tone_marks:
+        return 0.0
+    tone_chars = list(tones)
+    if len(tone_chars) != len(syllable_lengths):
+        return 0.0
+    boundary_for_digits: dict[int, str] = {}
+    boundary = 0
+    for length, t in zip(syllable_lengths, tone_chars):
+        boundary += length
+        boundary_for_digits[boundary] = t
+    bonus = 0.0
+    for at_digits, tone in tone_marks:
+        entry_tone = boundary_for_digits.get(at_digits)
+        if entry_tone is None:
+            bonus -= 500
+            continue
+        if entry_tone == "-":
+            continue
+        bonus += 12_000 if tone == entry_tone else -18_000
+    return bonus
+
+
+def test_jietu_tone_position_alignment():
+    """截圖 (jié tú, "screenshot") vs a 接/皆/街 + 圖 chop — the report's second case.
+
+    User types 截's 3 digits ("260"), presses 2nd tone right away (intending it for
+    截, not the 圖 that follows), then types 圖's 2 digits ("49") with no further tone
+    press (圖 is unambiguously 2nd tone already). The old toneScore compared typed
+    tones against a candidate's tones *from the right* (last press vs last syllable),
+    so with only one tone typed it always landed on 圖 — which is 2nd tone in every
+    candidate regardless of which 260-homophone (接/皆/街/截) was chosen. Tone scoring
+    then couldn't tell 截 apart from its much higher-weight tone-1 homophones at all,
+    so raw weight decided it and a chop of 接+圖 (weight 19429) buried 截+圖 (1253).
+    """
+    entries = load_all()
+    jie_reading, tu_reading = "ㄐㄧㄝˊ", "ㄊㄨˊ"
+    assert encode_reading(jie_reading) == "260"
+    assert encode_reading(tu_reading) == "49"
+
+    def weight_of(word: str, reading: str) -> int:
+        hits = [wt for w, r, t9, wt in entries if w == word and r == reading]
+        assert hits, f"{word} ({reading}) missing from dict"
+        return max(hits)
+
+    jie2_w = weight_of("截", jie_reading)   # 2nd tone, low weight
+    tu_w = weight_of("圖", tu_reading)
+    jie1_w = max(weight_of(w, "ㄐㄧㄝ") for w in ("接", "皆", "街"))  # 1st tone, high weight
+    assert jie1_w > jie2_w, "sanity: this is exactly why the chop used to win on raw weight"
+
+    tone_marks = [(3, "w")]  # pressed 2nd tone right after 截's 3 digits; none for 圖
+    syllable_lengths = [3, 2]  # 截/接 (3 digits) + 圖 (2 digits)
+
+    def score(first_weight: int, first_tone: str) -> float:
+        min_w = min(first_weight, tu_w)
+        seg_penalty = min_w * 1 * 0.75  # same proportional segPenalty as danshi_beats_chop
+        tone_bonus = tone_score_by_position(tone_marks, first_tone + "w", syllable_lengths)
+        return (min_w - seg_penalty) + tone_bonus
+
+    jie2_score = score(jie2_w, "w")   # 截 + 圖
+    jie1_score = score(jie1_w, "q")   # 接/皆/街 + 圖
+    assert jie2_score > jie1_score, (jie2_score, jie1_score)
+    print("jietu_tone_position_alignment OK", jie2_score, ">", jie1_score)
+
+
 def test_fullcoverage_survives_tone_press():
     """業 (ㄧㄝˋ, digits "60") must stay in T9SortFilter's "full coverage" bucket
     after the user presses the 4th-tone key — mirrors the T9SortFilter.sort fix.
@@ -419,6 +486,7 @@ def main() -> int:
     test_haoxiang_beats_haolashi()
     test_you_beats_rao()
     test_danshi_beats_chop()
+    test_jietu_tone_position_alignment()
     test_fullcoverage_survives_tone_press()
     test_chi_reachable_with_tone()
     print("ALL PASSED")

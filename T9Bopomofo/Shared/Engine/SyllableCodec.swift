@@ -42,14 +42,16 @@ enum SyllableCodec {
         return EncodedSyllable(digits: digits, tone: tone)
     }
 
-    static func encodeReading(_ reading: String) -> (digits: String, tones: String) {
+    static func encodeReading(_ reading: String) -> (digits: String, tones: String, syllableLengths: [Int]) {
         var digits = ""
         var tones = ""
+        var syllableLengths: [Int] = []
         for part in reading.split(separator: " ") {
             guard let enc = encodeSyllable(String(part)) else { continue }
             digits += enc.digits
             tones.append(enc.tone ?? "-")
+            syllableLengths.append(enc.digits.count)
         }
-        return (digits, tones)
+        return (digits, tones, syllableLengths)
     }
 }

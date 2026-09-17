@@ -15,6 +15,10 @@ final class InputEngine: ObservableObject {
     private let lexicon = DictionaryLoader()
     private let userLexicon: UserLexicon
     private var loaded = false
+    /// Each tone key press, tagged with `composingDigits.count` at the moment it was pressed —
+    /// lets tone scoring match a press to the exact syllable it was meant for (by digit
+    /// position) instead of assuming presses arrive in strict per-syllable left-to-right order.
+    private var toneMarks: [(digits: Int, tone: Character)] = []
     private var candidateLimit = 40  // ponytail: 12->40 so rare chars appear
     private var llmTask: Task<Void, Never>?
     private var lastPredictionContext: String = ""
@@ -94,10 +98,13 @@ final class InputEngine: ObservableObject {
     }
 
     func tapTone(_ tone: Character) {
-        if composingTones.count >= syllableEstimate(for: composingDigits), !composingTones.isEmpty {
-            composingTones.removeLast()
+        // A second tone press with no digits typed in between targets the same syllable
+        // (the user changed their mind) — replace rather than stack a second mark on it.
+        if let last = toneMarks.last, last.digits == composingDigits.count {
+            toneMarks.removeLast()
         }
-        composingTones.append(tone)
+        toneMarks.append((digits: composingDigits.count, tone: tone))
+        composingTones = String(toneMarks.map(\.tone))
         refreshSwiftCandidates()
     }
 
@@ -109,8 +116,9 @@ final class InputEngine: ObservableObject {
     }
 
     func backspace() {
-        if !composingTones.isEmpty {
-            composingTones.removeLast()
+        if !toneMarks.isEmpty {
+            toneMarks.removeLast()
+            composingTones = String(toneMarks.map(\.tone))
         } else if !composingDigits.isEmpty {
             composingDigits.removeLast()
         }
@@ -120,6 +128,7 @@ final class InputEngine: ObservableObject {
     func clearComposing() {
         composingDigits = ""
         composingTones = ""
+        toneMarks = []
         candidates = []
         preeditDisplay = ""
     }
@@ -261,7 +270,7 @@ final class InputEngine: ObservableObject {
 
         for (span, entries) in lexicon.prefixSpans(of: digits) {
             for e in entries {
-                let toneBonus = toneScore(tones: e.tones)
+                let toneBonus = toneScore(tones: e.tones, syllableLengths: e.syllableLengths)
                 let userBoost = userLexicon.boost(for: e.word, previous: lastCommitted.isEmpty ? nil : lastCommitted)
                 let score = Double(e.weight) + toneBonus + userBoost
                 let cand = Candidate(
@@ -281,7 +290,7 @@ final class InputEngine: ObservableObject {
         }
 
         if let phrase = PhraseSegmenter.bestPhrase(digits: digits, lexicon: lexicon) {
-            let toneBonus = toneScore(tones: phrase.tones)
+            let toneBonus = toneScore(tones: phrase.tones, syllableLengths: phrase.syllableLengths)
             let userBoost = userLexicon.boost(for: phrase.word, previous: lastCommitted.isEmpty ? nil : lastCommitted)
             items.append(T9SortFilter.Item(
                 candidate: Candidate(
@@ -298,7 +307,7 @@ final class InputEngine: ObservableObject {
         }
 
         for (pi, path) in PhraseSegmenter.nBest(digits: digits, lexicon: lexicon, limit: 8).enumerated() {
-            let toneBonus = toneScore(tones: path.tones)
+            let toneBonus = toneScore(tones: path.tones, syllableLengths: path.syllableLengths)
             let userBoost = userLexicon.boost(for: path.text, previous: lastCommitted.isEmpty ? nil : lastCommitted)
             // Proportional (not flat) penalty: libchewing single-char weights can be ~10x a real
             // phrase's weight, so a flat penalty is swamped and a chop of two common chars
@@ -325,7 +334,7 @@ final class InputEngine: ObservableObject {
                         id: "seg1-\(pi)-\(first.word)",
                         text: first.word,
                         reading: first.reading,
-                        score: Double(first.weight) + toneScore(tones: first.tones) + userLexicon.boost(for: first.word, previous: lastCommitted.isEmpty ? nil : lastCommitted),
+                        score: Double(first.weight) + toneScore(tones: first.tones, syllableLengths: first.syllableLengths) + userLexicon.boost(for: first.word, previous: lastCommitted.isEmpty ? nil : lastCommitted),
                         source: .exact
                     ),
                     coverage: first.t9.count,
@@ -337,7 +346,7 @@ final class InputEngine: ObservableObject {
 
         if AppSettings.shared.fuzzyNeighborEffective {
             for m in FuzzyMatcher.fuzzy(digits: digits, lexicon: lexicon, maxDistance: 1, limit: 12) {
-                let toneBonus = toneScore(tones: m.entry.tones) * 0.5
+                let toneBonus = toneScore(tones: m.entry.tones, syllableLengths: m.entry.syllableLengths) * 0.5
                 let userBoost = userLexicon.boost(for: m.entry.word, previous: lastCommitted.isEmpty ? nil : lastCommitted)
                 items.append(T9SortFilter.Item(
                     candidate: Candidate(
@@ -359,24 +368,33 @@ final class InputEngine: ObservableObject {
         candidates = Array(sorted.prefix(candidateLimit))
     }
 
-    private func toneScore(tones entryTones: String) -> Double {
-        guard !composingTones.isEmpty else { return 0 }
-        let wanted = Array(composingTones)
-        let have = Array(entryTones.filter { $0 != "-" })
-        guard !have.isEmpty else { return -100 }
+    /// Matches each typed tone to the syllable it was pressed for, by comparing the digit
+    /// count at press time against this candidate's own per-syllable digit boundaries —
+    /// NOT by press order. Two syllables can need different tones typed in either order
+    /// (e.g. tone pressed right after the first syllable, more digits typed after that for
+    /// a second, untoned syllable); assuming the last-pressed tone belongs to the last
+    /// syllable silently misattributes it whenever the counts don't line up.
+    private func toneScore(tones entryTones: String, syllableLengths: [Int]) -> Double {
+        guard !toneMarks.isEmpty else { return 0 }
+        let toneChars = Array(entryTones)
+        guard toneChars.count == syllableLengths.count else { return 0 }
+
+        var boundaryForDigits: [Int: Character] = [:]
+        var boundary = 0
+        for (i, len) in syllableLengths.enumerated() {
+            boundary += len
+            boundaryForDigits[boundary] = toneChars[i]
+        }
+
         var bonus: Double = 0
-        for (offset, w) in wanted.reversed().enumerated() {
-            if offset >= have.count {
-                bonus -= 500
+        for mark in toneMarks {
+            guard let entryTone = boundaryForDigits[mark.digits] else {
+                bonus -= 500 // this candidate doesn't have a syllable break where the tone was pressed
                 continue
             }
-            let h = have[have.count - 1 - offset]
-            bonus += (w == h) ? 12_000 : -18_000
+            guard entryTone != "-" else { continue } // neutral/unknown tone: no anchor either way
+            bonus += (mark.tone == entryTone) ? 12_000 : -18_000
         }
         return bonus
-    }
-
-    private func syllableEstimate(for digits: String) -> Int {
-        max(1, (digits.count + 1) / 2)
     }
 }

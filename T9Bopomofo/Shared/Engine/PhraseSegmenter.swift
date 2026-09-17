@@ -8,6 +8,7 @@ enum PhraseSegmenter {
         var reading: String { entries.map(\.reading).joined(separator: " ") }
         var weight: Int { entries.map(\.weight).min() ?? 0 }
         var tones: String { entries.map(\.tones).joined() }
+        var syllableLengths: [Int] { entries.flatMap(\.syllableLengths) }
     }
 
     static func greedy(digits: String, lexicon: DictionaryLoader, maxWordKeys: Int = 12) -> [LexiconEntry] {

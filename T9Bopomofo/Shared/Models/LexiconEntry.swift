@@ -7,6 +7,10 @@ struct LexiconEntry: Hashable, Sendable {
     let t9: String
     /// Per-syllable tone markers (q/w/x/y/-), same length as syllable count.
     let tones: String
+    /// T9 digit count of each syllable, in reading order. Sum equals `t9.count`.
+    /// Lets tone scoring match a typed tone to the exact syllable it was pressed
+    /// for (by composing-digit position), instead of guessing from press order.
+    let syllableLengths: [Int]
     let weight: Int
 }
 

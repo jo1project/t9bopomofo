@@ -122,9 +122,9 @@ final class DictionaryLoader: @unchecked Sendable {
             } else {
                 weight = 1000
             }
-            let (digits, tones) = SyllableCodec.encodeReading(reading)
+            let (digits, tones, syllableLengths) = SyllableCodec.encodeReading(reading)
             guard !digits.isEmpty else { continue }
-            result.append(LexiconEntry(word: word, reading: reading, t9: digits, tones: tones, weight: weight))
+            result.append(LexiconEntry(word: word, reading: reading, t9: digits, tones: tones, syllableLengths: syllableLengths, weight: weight))
         }
         return result
     }
