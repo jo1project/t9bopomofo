@@ -42,21 +42,6 @@ jobs:
           xcodebuild -version
           xcrun --sdk iphoneos --show-sdk-version
 
-      - name: TEMP bench lexicon load (remove before merging)
-        run: |
-          set -euo pipefail
-          GEN_SRC="$RUNNER_TEMP/bench_lexicon.swift"
-          GEN_BIN="$RUNNER_TEMP/bench_lexicon"
-          cat T9Bopomofo/Shared/Models/LexiconEntry.swift \
-              T9Bopomofo/Shared/Engine/T9KeyMap.swift \
-              T9Bopomofo/Shared/Engine/SyllableCodec.swift \
-              T9Bopomofo/Shared/Engine/DictionaryLoader.swift \
-              Scripts/bench_lexicon_main.swift > "$GEN_SRC"
-          swiftc -O "$GEN_SRC" -o "$GEN_BIN"
-          "$GEN_BIN" \
-              Resources/chewing/chewing_base.dict.yaml \
-              Resources/chewing/taiwan_phrases.dict.yaml
-
       - name: Install XcodeGen
         run: brew install xcodegen
 
