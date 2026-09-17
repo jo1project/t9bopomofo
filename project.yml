@@ -16,7 +16,7 @@ settings:
     CODE_SIGNING_ALLOWED: YES
     DEVELOPMENT_TEAM: S24Z424MU4
     MARKETING_VERSION: "0.3.9"
-    CURRENT_PROJECT_VERSION: "74"
+    CURRENT_PROJECT_VERSION: "76"
 
 targets:
   T9Bopomofo:
@@ -35,7 +35,7 @@ targets:
       CODE_SIGN_IDENTITY: "Apple Distribution"
       PROVISIONING_PROFILE_SPECIFIER: ""
       MARKETING_VERSION: "0.3.9"
-      CURRENT_PROJECT_VERSION: "74"
+      CURRENT_PROJECT_VERSION: "76"
     dependencies:
       - target: T9Keyboard
         embed: true
@@ -65,7 +65,7 @@ targets:
       PROVISIONING_PROFILE_SPECIFIER: ""
       SKIP_INSTALL: YES
       MARKETING_VERSION: "0.3.9"
-      CURRENT_PROJECT_VERSION: "74"
+      CURRENT_PROJECT_VERSION: "76"
     dependencies:
       - sdk: CoreFoundation.framework
       - sdk: Security.framework
