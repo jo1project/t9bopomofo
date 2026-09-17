@@ -223,49 +223,44 @@ final class SymbolKeyboardView: UIView {
     var onBackspace: (() -> Void)?
     var onMode: ((KeyboardMode) -> Void)?
 
-    private let symbols = [
-        Array("1234567890"),
+    private enum Page {
+        case digits
+        case symbols
+    }
+
+    private let symbolRows = [
         Array("-/:;()$&@\""),
         Array(".,?!'" ),
+        Array("#%^*+=_<>~"),
     ]
+
+    private var page: Page = .digits
+    private let digitsStack = UIStackView()
+    private let symbolsStack = UIStackView()
+    private var toggleButtons: [UIButton] = []
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         backgroundColor = KeyboardChrome.background(for: traitCollection)
-        let root = UIStackView()
-        root.axis = .vertical
-        root.spacing = KeyboardChrome.rowSpacing
-        root.distribution = .fillEqually
-        root.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(root)
-        let inset = KeyboardChrome.edgeInset
-        NSLayoutConstraint.activate([
-            root.topAnchor.constraint(equalTo: topAnchor, constant: inset),
-            root.leadingAnchor.constraint(equalTo: leadingAnchor, constant: inset),
-            root.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -inset),
-            root.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -inset),
-        ])
-        for rowChars in symbols {
-            let row = UIStackView()
-            row.axis = .horizontal
-            row.spacing = KeyboardChrome.keySpacing
-            row.distribution = .fillEqually
-            for ch in rowChars {
-                let s = String(ch)
-                row.addArrangedSubview(makeKey(s) { [weak self] in self?.onInsert?(s) })
-            }
-            root.addArrangedSubview(row)
+
+        for stack in [digitsStack, symbolsStack] {
+            stack.axis = .vertical
+            stack.spacing = KeyboardChrome.rowSpacing
+            stack.distribution = .fillEqually
+            stack.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(stack)
+            let inset = KeyboardChrome.edgeInset
+            NSLayoutConstraint.activate([
+                stack.topAnchor.constraint(equalTo: topAnchor, constant: inset),
+                stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: inset),
+                stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -inset),
+                stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -inset),
+            ])
         }
-        let bottom = UIStackView()
-        bottom.axis = .horizontal
-        bottom.spacing = KeyboardChrome.keySpacing
-        bottom.distribution = .fillEqually
-        bottom.addArrangedSubview(makeKey("注", isFunction: true) { [weak self] in self?.onMode?(.zhuyin) })
-        bottom.addArrangedSubview(makeKey("EN", isFunction: true) { [weak self] in self?.onMode?(.english) })
-        bottom.addArrangedSubview(makeKey("。") { [weak self] in self?.onInsert?("。") })
-        bottom.addArrangedSubview(makeKey("，") { [weak self] in self?.onInsert?("，") })
-        bottom.addArrangedSubview(makeKey("⌫", isFunction: true) { [weak self] in self?.onBackspace?() })
-        root.addArrangedSubview(bottom)
+
+        buildDigitsPage()
+        buildSymbolsPage()
+        updatePageVisibility()
     }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
@@ -274,6 +269,82 @@ final class SymbolKeyboardView: UIView {
     }
 
     required init?(coder: NSCoder) { fatalError() }
+
+    private func buildDigitsPage() {
+        for digits in ["123", "456", "789"] {
+            let row = UIStackView()
+            row.axis = .horizontal
+            row.spacing = KeyboardChrome.keySpacing
+            row.distribution = .fillEqually
+            for ch in digits {
+                let s = String(ch)
+                row.addArrangedSubview(makeKey(s) { [weak self] in self?.onInsert?(s) })
+            }
+            digitsStack.addArrangedSubview(row)
+        }
+        // Bottom row mirrors a phone dial pad's last row (*, 0, #), but with our
+        // mode-switch keys either side of 0 instead of unused punctuation.
+        let bottomRow = UIStackView()
+        bottomRow.axis = .horizontal
+        bottomRow.spacing = KeyboardChrome.keySpacing
+        bottomRow.distribution = .fillEqually
+        bottomRow.addArrangedSubview(makeKey("注", isFunction: true) { [weak self] in self?.onMode?(.zhuyin) })
+        bottomRow.addArrangedSubview(makeKey("EN", isFunction: true) { [weak self] in self?.onMode?(.english) })
+        bottomRow.addArrangedSubview(makeKey("0") { [weak self] in self?.onInsert?("0") })
+        let toggle = makeKey(toggleTitle, isFunction: true) { [weak self] in self?.togglePage() }
+        toggleButtons.append(toggle)
+        bottomRow.addArrangedSubview(toggle)
+        bottomRow.addArrangedSubview(makeKey("⌫", isFunction: true) { [weak self] in self?.onBackspace?() })
+        digitsStack.addArrangedSubview(bottomRow)
+    }
+
+    private func buildSymbolsPage() {
+        for rowChars in symbolRows {
+            let row = UIStackView()
+            row.axis = .horizontal
+            row.spacing = KeyboardChrome.keySpacing
+            row.distribution = .fillEqually
+            for ch in rowChars {
+                let s = String(ch)
+                row.addArrangedSubview(makeKey(s) { [weak self] in self?.onInsert?(s) })
+            }
+            symbolsStack.addArrangedSubview(row)
+        }
+        symbolsStack.addArrangedSubview(makeControlRow())
+    }
+
+    private func makeControlRow() -> UIStackView {
+        let row = UIStackView()
+        row.axis = .horizontal
+        row.spacing = KeyboardChrome.keySpacing
+        row.distribution = .fillEqually
+        row.addArrangedSubview(makeKey("注", isFunction: true) { [weak self] in self?.onMode?(.zhuyin) })
+        row.addArrangedSubview(makeKey("EN", isFunction: true) { [weak self] in self?.onMode?(.english) })
+        let toggle = makeKey(toggleTitle, isFunction: true) { [weak self] in self?.togglePage() }
+        toggleButtons.append(toggle)
+        row.addArrangedSubview(toggle)
+        row.addArrangedSubview(makeKey("。") { [weak self] in self?.onInsert?("。") })
+        row.addArrangedSubview(makeKey("，") { [weak self] in self?.onInsert?("，") })
+        row.addArrangedSubview(makeKey("⌫", isFunction: true) { [weak self] in self?.onBackspace?() })
+        return row
+    }
+
+    private var toggleTitle: String {
+        page == .digits ? "#+=" : "123"
+    }
+
+    private func togglePage() {
+        page = (page == .digits) ? .symbols : .digits
+        updatePageVisibility()
+        for btn in toggleButtons {
+            btn.setTitle(toggleTitle, for: .normal)
+        }
+    }
+
+    private func updatePageVisibility() {
+        digitsStack.isHidden = page != .digits
+        symbolsStack.isHidden = page != .symbols
+    }
 
     private func makeKey(_ title: String, isFunction: Bool = false, _ action: @escaping () -> Void) -> UIButton {
         let b = UIButton(type: .system)

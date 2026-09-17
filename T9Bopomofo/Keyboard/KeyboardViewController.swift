@@ -60,6 +60,10 @@ final class KeyboardViewController: UIInputViewController {
 
         candidateBar.onSelect = { [weak self] candidate in
             guard let self else { return }
+            if self.mode == .english {
+                self.acceptEnglishSuggestion(candidate)
+                return
+            }
             let text = self.engine.selectCandidate(candidate)
             self.textDocumentProxy.insertText(text)
             self.collapseCandidates()
@@ -100,9 +104,53 @@ final class KeyboardViewController: UIInputViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         AppSettings.shared.reloadFromDisk()
-        if !engine.isComposing {
+        if mode == .english {
+            refreshEnglishSuggestions()
+        } else if !engine.isComposing {
             refreshPredictionsFromDocument()
         }
+    }
+
+    // MARK: - English spelling suggestions (UITextChecker, opt-in via candidate bar tap)
+
+    private static let textChecker = UITextChecker()
+
+    private static func trailingWord(in text: String) -> String {
+        String(text.reversed().prefix { $0.isLetter && $0.isASCII }.reversed())
+    }
+
+    private func refreshEnglishSuggestions() {
+        let before = textDocumentProxy.documentContextBeforeInput ?? ""
+        let word = Self.trailingWord(in: before)
+        guard word.count >= 2 else {
+            candidateBar.setCandidates([], preedit: "")
+            return
+        }
+        let range = NSRange(location: 0, length: word.utf16.count)
+        guard Self.textChecker.rangeOfMisspelledWord(in: word, range: range, startingAt: 0, wrap: false, language: "en_US").location != NSNotFound else {
+            candidateBar.setCandidates([], preedit: "")
+            return
+        }
+        let guesses = Self.textChecker.guesses(forWordRange: range, in: word, language: "en_US") ?? []
+        let candidates = guesses.prefix(5).enumerated().map { idx, g in
+            Candidate(id: "spell-\(idx)-\(g)", text: g, reading: "", score: Double(100 - idx), source: .prediction)
+        }
+        candidateBar.setCandidates(candidates, preedit: "")
+    }
+
+    private func acceptEnglishSuggestion(_ candidate: Candidate) {
+        let before = textDocumentProxy.documentContextBeforeInput ?? ""
+        let word = Self.trailingWord(in: before)
+        guard !word.isEmpty else { return }
+        for _ in 0..<word.count {
+            textDocumentProxy.deleteBackward()
+        }
+        var replacement = candidate.text
+        if let first = word.first, first.isUppercase {
+            replacement = replacement.prefix(1).uppercased() + replacement.dropFirst()
+        }
+        textDocumentProxy.insertText(replacement + " ")
+        candidateBar.setCandidates([], preedit: "")
     }
 
     private func reloadCandidates() {
@@ -240,15 +288,22 @@ final class KeyboardViewController: UIInputViewController {
                     guard let self else { return }
                     self.textDocumentProxy.insertText(s)
                     // ponytail: skip engine/reload in EN mode - direct insert faster
+                    self.refreshEnglishSuggestions()
                 }
-                en.onBackspace = { [weak self] in self?.textDocumentProxy.deleteBackward() }
+                en.onBackspace = { [weak self] in
+                    guard let self else { return }
+                    self.textDocumentProxy.deleteBackward()
+                    self.refreshEnglishSuggestions()
+                }
                 en.onMode = { [weak self] m in
+                    self?.candidateBar.setCandidates([], preedit: "")
                     self?.mode = m
                     self?.renderKeyboard()
                 }
                 englishKeyboard = en
             }
             englishKeyboard?.isHidden = false
+            refreshEnglishSuggestions()
         case .symbols:
             if symbolKeyboard == nil {
                 let sym = SymbolKeyboardView()
