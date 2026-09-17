@@ -14,7 +14,6 @@ final class InputEngine: ObservableObject {
 
     private let lexicon = DictionaryLoader()
     private let userLexicon: UserLexicon
-    private var loaded = false
     /// Each tone key press, tagged with `composingDigits.count` at the moment it was pressed —
     /// lets tone scoring match a press to the exact syllable it was meant for (by digit
     /// position) instead of assuming presses arrive in strict per-syllable left-to-right order.
@@ -35,56 +34,34 @@ final class InputEngine: ObservableObject {
         refreshSwiftCandidates()
     }
 
-    private var isLexiconLoading = false
-
+    /// DictionaryLoader.loadFromBundle() just locates the (sharded) bundle resources —
+    /// it doesn't decode anything yet, so this is cheap enough to call synchronously here.
+    /// Actual dictionary data loads lazily, one T9-first-digit shard at a time, the first
+    /// time a query touches it (see DictionaryLoader.ensureShardLoaded) — no more background
+    /// queue, no more "not loaded yet" state to gate reads against.
     func prepare(bundle: Bundle = .main) {
-        ensureLexiconLoadedAsync(bundle: bundle)
-        refreshSwiftCandidates()
-    }
-
-    private func ensureLexiconLoadedAsync(bundle: Bundle) {
-        guard !loaded, !isLexiconLoading else { return }
-        isLexiconLoading = true
-
-        DispatchQueue.global(qos: .utility).async { [weak self] in
-            guard let self else { return }
-            var loadedSuccessfully = false
-            do {
-                try self.lexicon.loadFromBundle(bundle: bundle)
-                loadedSuccessfully = true
-            } catch {
-                let fm = FileManager.default
-                let dirs = [
-                    URL(fileURLWithPath: "Resources/chewing"),
-                    URL(fileURLWithPath: "../Resources/chewing"),
-                    URL(fileURLWithPath: "../../Resources/chewing"),
-                ]
-                for dir in dirs where fm.fileExists(atPath: dir.path) {
-                    let urls = ["taiwan_phrases.dict.yaml", "chewing_base.dict.yaml"]
-                        .map { dir.appendingPathComponent($0) }
-                        .filter { fm.fileExists(atPath: $0.path) }
-                    if !urls.isEmpty {
-                        try? self.lexicon.load(from: urls)
-                        loadedSuccessfully = true
-                        break
-                    }
-                }
-            }
-
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                self.loaded = loadedSuccessfully
-                self.isLexiconLoading = false
-                if loadedSuccessfully {
-                    self.refreshSwiftCandidates()
+        if (try? lexicon.loadFromBundle(bundle: bundle)) == nil {
+            let fm = FileManager.default
+            let dirs = [
+                URL(fileURLWithPath: "Resources/chewing"),
+                URL(fileURLWithPath: "../Resources/chewing"),
+                URL(fileURLWithPath: "../../Resources/chewing"),
+            ]
+            for dir in dirs where fm.fileExists(atPath: dir.path) {
+                let urls = ["taiwan_phrases.dict.yaml", "chewing_base.dict.yaml"]
+                    .map { dir.appendingPathComponent($0) }
+                    .filter { fm.fileExists(atPath: $0.path) }
+                if !urls.isEmpty {
+                    try? lexicon.load(from: urls)
+                    break
                 }
             }
         }
+        refreshSwiftCandidates()
     }
 
     func load(from urls: [URL]) throws {
         try lexicon.load(from: urls)
-        loaded = true
         refreshSwiftCandidates()
     }
 
@@ -248,13 +225,8 @@ final class InputEngine: ObservableObject {
     // MARK: - Swift T9 ranking
 
     private func refreshSwiftCandidates() {
-        // Runs on every exit path (including the early-return for empty composing digits),
-        // so callers that only learn about new candidates through this callback — like the
-        // async lexicon-load completion below — still get the UI to refresh. Without it, the
-        // very first keystroke (typed before the ~187k-row dictionary finishes loading in the
-        // background) computed no candidates, and the load finishing afterward updated
-        // `candidates` with nobody told to redraw — it only became visible on the next key
-        // press, which happened to trigger its own reload from KeyboardViewController.
+        // Runs on every exit path (including the early-return for empty composing digits) so
+        // callers always get the UI to refresh after this call.
         defer { onCandidatesChanged?() }
         preeditDisplay = composingDigits.isEmpty
             ? ""
@@ -269,17 +241,6 @@ final class InputEngine: ObservableObject {
             } else {
                 candidates = []
             }
-            return
-        }
-
-        // Lexicon load runs on a background queue; reading entries/prefixBuckets/exactIndex
-        // from here while that's still writing them is an unsynchronized data race that can
-        // corrupt the Dictionary/Array storage and crash the extension. Bail until `loaded`
-        // flips true (on the main actor, strictly after the background write completes) —
-        // the completion handler calls this again once it does, and the defer above still
-        // notifies the UI so preedit shows immediately even with no candidates yet.
-        guard loaded else {
-            candidates = []
             return
         }
 

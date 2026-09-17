@@ -1,13 +1,14 @@
 // Throwaway perf benchmark — NOT part of the app, NOT wired into any product build
-// phase. Concatenated (by .github/workflows/bench-lexicon.yml) onto the real
-// LexiconEntry.swift, T9KeyMap.swift, SyllableCodec.swift, DictionaryLoader.swift,
+// phase (currently invoked as a temp step in .github/workflows/build-ipa.yml). Concatenated
+// onto the real LexiconEntry.swift, T9KeyMap.swift, SyllableCodec.swift, DictionaryLoader.swift,
 // compiled with swiftc, and run on a macOS CI runner.
 //
-// Purpose: settle, with real numbers instead of another guess, where the
-// "~1s before the first keystroke shows anything" time actually goes — YAML text
-// parsing, PropertyListDecoder, or DictionaryLoader.rebuildIndex(). Delete this
-// file (and the bench-lexicon.yml workflow) once that's answered and any follow-up
-// fix is verified, unless it's worth keeping as a standing perf check.
+// Round 1 (monolithic YAML vs monolithic binary-plist load) showed PropertyListDecoder
+// decoding all ~160k entries was actually SLOWER than the original hand-rolled YAML parser
+// (1827ms vs 1085ms decode-only; 2047ms vs 1569ms end to end) — rebuildIndex() was never the
+// bottleneck. This round measures the follow-up fix: sharding by T9 first digit
+// (DictionaryLoader.shardKeys) so a cold keystroke only ever decodes ONE shard
+// (DictionaryLoader.ensureShardLoaded), not all ~160k entries.
 //
 // Usage: bench_lexicon <base.yaml> <phrases.yaml>
 
@@ -33,9 +34,7 @@ guard arguments.count == 3 else {
 do {
     let yamlURLs = [URL(fileURLWithPath: arguments[1]), URL(fileURLWithPath: arguments[2])]
 
-    // D: raw text -> [LexiconEntry], no dedup, no index — isolates SyllableCodec-driven
-    // text parsing alone (parseDictionaryYAML is `internal`, callable from here since
-    // this file is concatenated into the same compilation unit as DictionaryLoader).
+    // D / A: reference baseline from round 1 — the original eager YAML path.
     var parsedOnly: [LexiconEntry] = []
     let tD = try time("D: YAML parse only (no dedup/index)") {
         for url in yamlURLs {
@@ -45,37 +44,43 @@ do {
     }
     print("[bench] D produced \(parsedOnly.count) raw rows (pre-dedup)")
 
-    // A: the ORIGINAL runtime path end to end (parse + dedup + rebuildIndex) — what
-    // every build before the prebuilt-binary change actually paid on cold launch.
     let yamlLoader = DictionaryLoader()
     let tA = try time("A: full YAML path (parse+dedup+rebuildIndex) — pre-fix baseline") {
         try yamlLoader.load(from: yamlURLs)
     }
     print("[bench] A produced \(yamlLoader.entries.count) deduped entries")
+    print("[bench] inferred dedup+rebuildIndex cost, YAML path (A - D): \(ms(tA - tD))")
 
-    // Encode a binary snapshot from A's result, exactly like generate_lexicon_main.swift does.
+    // Shard exactly like Scripts/generate_lexicon_main.swift, then time decoding EACH
+    // shard alone — this is what a real cold keystroke pays under the lazy design.
+    var shards: [Character: [LexiconEntry]] = [:]
+    for e in yamlLoader.entries {
+        guard let first = e.t9.first else { continue }
+        shards[first, default: []].append(e)
+    }
+
     let encoder = PropertyListEncoder()
     encoder.outputFormat = .binary
-    let binData = try encoder.encode(yamlLoader.entries)
-    let binURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("bench_lexicon.bin")
-    try binData.write(to: binURL)
-    print("[bench] binary snapshot: \(binData.count) bytes")
+    let tmpDir = URL(fileURLWithPath: NSTemporaryDirectory())
 
-    // C: PropertyListDecoder alone — isolates Codable/plist decode cost, no rebuildIndex.
-    let tC = try time("C: binary plist decode only (no rebuildIndex)") {
-        let data = try Data(contentsOf: binURL)
-        _ = try PropertyListDecoder().decode([LexiconEntry].self, from: data)
+    var shardTimes: [(key: Character, count: Int, seconds: Double)] = []
+    for key in DictionaryLoader.shardKeys {
+        let shard = shards[key] ?? []
+        let data = try encoder.encode(shard)
+        let url = tmpDir.appendingPathComponent("bench_shard_\(key).bin")
+        try data.write(to: url)
+        let t = try time("shard '\(key)' decode only (\(shard.count) entries, \(data.count) bytes)") {
+            let raw = try Data(contentsOf: url)
+            _ = try PropertyListDecoder().decode([LexiconEntry].self, from: raw)
+        }
+        shardTimes.append((key, shard.count, t))
     }
 
-    // B: the CURRENTLY SHIPPED runtime path end to end (decode + rebuildIndex).
-    let binLoader = DictionaryLoader()
-    let tB = try time("B: full binary path (decode+rebuildIndex) — currently shipped") {
-        try binLoader.loadBinary(from: binURL)
+    if let worst = shardTimes.max(by: { $0.seconds < $1.seconds }) {
+        print("[bench] worst-case single shard: '\(worst.key)' (\(worst.count) entries): \(ms(worst.seconds))")
     }
-    print("[bench] B produced \(binLoader.entries.count) entries")
-
-    print("[bench] inferred rebuildIndex cost, binary path (B - C): \(ms(tB - tC))")
-    print("[bench] inferred dedup+rebuildIndex cost, YAML path (A - D): \(ms(tA - tD))")
+    let sumSeconds = shardTimes.reduce(0.0) { $0 + $1.seconds }
+    print("[bench] sum of all \(shardTimes.count) shard decodes (never paid in one shot; for sanity only): \(ms(sumSeconds))")
 } catch {
     FileHandle.standardError.write("bench_lexicon failed: \(error)\n".data(using: .utf8)!)
     exit(1)

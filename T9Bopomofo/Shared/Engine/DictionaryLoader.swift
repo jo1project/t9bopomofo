@@ -7,6 +7,14 @@ final class DictionaryLoader: @unchecked Sendable {
     /// Full T9 string → entry indices, for O(1) exact() lookups.
     private var exactIndex: [String: [Int]] = [:]
 
+    /// T9 keys, one shard per first digit — matches Scripts/generate_lexicon_main.swift's
+    /// sharding and T9KeyMap's key alphabet.
+    static let shardKeys: [Character] = Array("0123456789v")
+
+    /// Set once a sharded bundle is found; nil means we're in the eager YAML/dev path below.
+    private var shardBundle: Bundle?
+    private var loadedShards: Set<Character> = []
+
     func load(from urls: [URL]) throws {
         var all: [LexiconEntry] = []
         for url in urls {
@@ -27,26 +35,21 @@ final class DictionaryLoader: @unchecked Sendable {
         rebuildIndex()
     }
 
-    /// Loads the build-time-generated binary index (see `Scripts/generate_lexicon_main.swift`)
-    /// when present — skips re-parsing ~5.6MB of YAML text on every cold extension launch,
-    /// which is where the real load latency was coming from. Falls back to the YAML parser
-    /// below when the binary wasn't baked into this bundle (e.g. a build that skipped the
-    /// prebuild script).
-    func loadBinary(from url: URL) throws {
-        let data = try Data(contentsOf: url)
-        entries = try PropertyListDecoder().decode([LexiconEntry].self, from: data)
-        rebuildIndex()
-    }
-
+    /// Build-time (Scripts/generate_lexicon_main.swift) shards the dictionary into one
+    /// binary-plist file per T9 first-digit (lexicon-0.bin … lexicon-9.bin, lexicon-v.bin).
+    /// At runtime we don't decode ANY of them up front — decoding all ~160k entries turned
+    /// out to cost 1.5-2s regardless of source format (YAML text or Codable/plist), and that
+    /// was the real cause of the "first keystroke takes ~1s" complaint, not rebuildIndex().
+    /// Instead we remember the bundle and lazily decode+merge only the shard(s) a query
+    /// actually touches (see `ensureShardLoaded`), which is ~1/11th the work for a typical
+    /// single-syllable composing session.
     func loadFromBundle(bundle: Bundle = .main) throws {
-        let binSubdirs: [String?] = ["chewing", nil]
-        for sub in binSubdirs {
-            if let binURL = bundle.url(forResource: "lexicon", withExtension: "bin", subdirectory: sub) {
-                try loadBinary(from: binURL)
-                return
-            }
+        if Self.resourceURL(bundle: bundle, name: "lexicon-0", ext: "bin") != nil {
+            shardBundle = bundle
+            return
         }
 
+        // Dev/fallback path: no sharded bundle found, parse the YAML directly (eager).
         var urls: [URL] = []
         let names = ["taiwan_phrases.dict", "chewing_base.dict"]
         let subdirs: [String?] = ["chewing", nil]
@@ -66,8 +69,35 @@ final class DictionaryLoader: @unchecked Sendable {
         try load(from: urls)
     }
 
+    private static func resourceURL(bundle: Bundle, name: String, ext: String) -> URL? {
+        let subdirs: [String?] = ["chewing", nil]
+        for sub in subdirs {
+            if let url = bundle.url(forResource: name, withExtension: ext, subdirectory: sub) {
+                return url
+            }
+        }
+        return nil
+    }
+
+    /// Decodes and merges in the one shard `key` belongs to, if it hasn't been already.
+    /// No-op in the eager (non-sharded) path, where everything is already loaded.
+    private func ensureShardLoaded(_ key: Character) {
+        guard let bundle = shardBundle, !loadedShards.contains(key) else { return }
+        loadedShards.insert(key)
+        guard let url = Self.resourceURL(bundle: bundle, name: "lexicon-\(key)", ext: "bin"),
+              let data = try? Data(contentsOf: url),
+              let shard = try? PropertyListDecoder().decode([LexiconEntry].self, from: data)
+        else { return }
+        let base = entries.count
+        entries.append(contentsOf: shard)
+        for (offset, e) in shard.enumerated() {
+            indexEntry(e, at: base + offset)
+        }
+    }
+
     func candidates(forDigits digits: String, limit: Int = 40) -> [LexiconEntry] {
-        guard !digits.isEmpty else { return [] }
+        guard let first = digits.first else { return [] }
+        ensureShardLoaded(first)
         let key = String(digits.prefix(min(4, digits.count)))
         let idxs = prefixBuckets[key] ?? entries.indices.filter { entries[$0].t9.hasPrefix(String(digits.prefix(1))) }
         var out: [LexiconEntry] = []
@@ -93,7 +123,8 @@ final class DictionaryLoader: @unchecked Sendable {
     /// selection look like it does nothing, since the correct tone's candidate was already
     /// cut. The real cutoff (`candidateLimit`) is applied later, after tone scoring.
     func prefixSpans(of digits: String, maxSpan: Int = 12) -> [(span: String, entries: [LexiconEntry])] {
-        guard !digits.isEmpty else { return [] }
+        guard let first = digits.first else { return [] }
+        ensureShardLoaded(first)
         var result: [(String, [LexiconEntry])] = []
         let upper = min(maxSpan, digits.count)
         for len in 1...upper {
@@ -107,6 +138,8 @@ final class DictionaryLoader: @unchecked Sendable {
     }
 
     func exact(digits: String) -> [LexiconEntry] {
+        guard let first = digits.first else { return [] }
+        ensureShardLoaded(first)
         guard let idxs = exactIndex[digits] else { return [] }
         return idxs.map { entries[$0] }.sorted { $0.weight > $1.weight }
     }
@@ -162,15 +195,19 @@ final class DictionaryLoader: @unchecked Sendable {
         prefixBuckets.removeAll(keepingCapacity: true)
         exactIndex.removeAll(keepingCapacity: true)
         for (idx, e) in entries.enumerated() {
-            let p = String(e.t9.prefix(min(4, e.t9.count)))
-            prefixBuckets[p, default: []].append(idx)
-            if e.t9.count >= 2 {
-                let p2 = String(e.t9.prefix(2))
-                if p2 != p { prefixBuckets[p2, default: []].append(idx) }
-            }
-            let p1 = String(e.t9.prefix(1))
-            prefixBuckets[p1, default: []].append(idx)
-            exactIndex[e.t9, default: []].append(idx)
+            indexEntry(e, at: idx)
         }
+    }
+
+    private func indexEntry(_ e: LexiconEntry, at idx: Int) {
+        let p4 = String(e.t9.prefix(min(4, e.t9.count)))
+        prefixBuckets[p4, default: []].append(idx)
+        if e.t9.count >= 2 {
+            let p2 = String(e.t9.prefix(2))
+            if p2 != p4 { prefixBuckets[p2, default: []].append(idx) }
+        }
+        let p1 = String(e.t9.prefix(1))
+        prefixBuckets[p1, default: []].append(idx)
+        exactIndex[e.t9, default: []].append(idx)
     }
 }

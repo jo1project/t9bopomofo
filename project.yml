@@ -56,7 +56,7 @@ targets:
         buildPhase: resources
         type: folder
     prebuildScripts:
-      - name: Generate lexicon.bin
+      - name: Generate sharded lexicon-*.bin
         inputFiles:
           - $(SRCROOT)/Resources/chewing/chewing_base.dict.yaml
           - $(SRCROOT)/Resources/chewing/taiwan_phrases.dict.yaml
@@ -66,7 +66,17 @@ targets:
           - $(SRCROOT)/T9Bopomofo/Shared/Engine/DictionaryLoader.swift
           - $(SRCROOT)/Scripts/generate_lexicon_main.swift
         outputFiles:
-          - $(SRCROOT)/Resources/chewing/lexicon.bin
+          - $(SRCROOT)/Resources/chewing/lexicon-0.bin
+          - $(SRCROOT)/Resources/chewing/lexicon-1.bin
+          - $(SRCROOT)/Resources/chewing/lexicon-2.bin
+          - $(SRCROOT)/Resources/chewing/lexicon-3.bin
+          - $(SRCROOT)/Resources/chewing/lexicon-4.bin
+          - $(SRCROOT)/Resources/chewing/lexicon-5.bin
+          - $(SRCROOT)/Resources/chewing/lexicon-6.bin
+          - $(SRCROOT)/Resources/chewing/lexicon-7.bin
+          - $(SRCROOT)/Resources/chewing/lexicon-8.bin
+          - $(SRCROOT)/Resources/chewing/lexicon-9.bin
+          - $(SRCROOT)/Resources/chewing/lexicon-v.bin
         script: |
           set -euo pipefail
           GEN_SRC="$DERIVED_FILE_DIR/generate_lexicon.swift"
@@ -90,7 +100,7 @@ targets:
           "$GEN_BIN" \
               "$SRCROOT/Resources/chewing/chewing_base.dict.yaml" \
               "$SRCROOT/Resources/chewing/taiwan_phrases.dict.yaml" \
-              "$SRCROOT/Resources/chewing/lexicon.bin"
+              "$SRCROOT/Resources/chewing"
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.jo1project.t9bopomofo.keyboard
       INFOPLIST_FILE: T9Bopomofo/Keyboard/Info.plist
