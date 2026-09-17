@@ -272,6 +272,17 @@ final class InputEngine: ObservableObject {
             return
         }
 
+        // Lexicon load runs on a background queue; reading entries/prefixBuckets/exactIndex
+        // from here while that's still writing them is an unsynchronized data race that can
+        // corrupt the Dictionary/Array storage and crash the extension. Bail until `loaded`
+        // flips true (on the main actor, strictly after the background write completes) —
+        // the completion handler calls this again once it does, and the defer above still
+        // notifies the UI so preedit shows immediately even with no candidates yet.
+        guard loaded else {
+            candidates = []
+            return
+        }
+
         var items: [T9SortFilter.Item] = []
         let digits = composingDigits
         let inputStream = T9SortFilter.combinedInput(digits: digits, tones: composingTones)
