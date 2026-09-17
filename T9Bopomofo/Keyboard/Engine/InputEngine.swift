@@ -355,7 +355,7 @@ final class InputEngine: ObservableObject {
         }
 
         items.sort { $0.candidate.score > $1.candidate.score }
-        let sorted = T9SortFilter.sort(items: items, inputDigitsAndTones: inputStream)
+        let sorted = T9SortFilter.sort(items: items, inputDigitsAndTones: inputStream, digitsCount: digits.count)
         candidates = Array(sorted.prefix(candidateLimit))
     }
 

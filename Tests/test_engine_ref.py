@@ -331,6 +331,45 @@ def test_danshi_beats_chop():
     print("danshi_beats_chop OK", phrase_score, ">", best_chop)
 
 
+def test_fullcoverage_survives_tone_press():
+    """業 (ㄧㄝˋ, digits "60") must stay in T9SortFilter's "full coverage" bucket
+    after the user presses the 4th-tone key — mirrors the T9SortFilter.sort fix.
+
+    item.coverage is always in T9-digit-only units (every InputEngine caller sets
+    it that way). The old code compared it against `(digits+tones).count` instead
+    of `digits.count`, so pressing any tone key made every legitimately full-length
+    candidate's coverage look "too short" (demoted out of the full bucket) while
+    FuzzyMatcher's "missing key" guesses — one digit *longer* than what was typed,
+    by design — coincidentally satisfied the same broken comparison and jumped to
+    the front. Typing 業 (digits "60") + 4th tone showed 遺業/一夜/... (all digits
+    "660", a FuzzyMatcher missing-key guess for "60") instead of 業 itself.
+    """
+    entries = load_all()
+    digits, tones = "60", "y"
+
+    ye_hits = [(w, wt) for w, r, t9, wt in entries if t9 == digits and w == "業"]
+    assert ye_hits, "業 missing at digits 60"
+    ye_weight = max(wt for _, wt in ye_hits)
+
+    yiye_hits = [(w, wt) for w, r, t9, wt in entries if t9 == "660" and w == "遺業"]
+    assert yiye_hits, "遺業 missing at digits 660 (expected FuzzyMatcher missing-key neighbor)"
+
+    digits_count = len(digits)
+    combined_len = len(digits + tones)  # 3
+
+    ye_coverage = 2       # 業's own t9 length — what every real caller sets
+    yiye_coverage = 3     # 遺業's t9 length, one digit longer (FuzzyMatcher "missing key")
+
+    # Old (buggy) rule: cov >= combined_len
+    assert not (ye_coverage >= combined_len), "sanity: this is exactly why 業 got demoted"
+    assert yiye_coverage >= combined_len, "sanity: this is exactly why 遺業 got promoted"
+
+    # Fixed rule: cov == digits_count
+    assert ye_coverage == digits_count, "業 must be full-coverage after the fix"
+    assert yiye_coverage != digits_count, "遺業 (missing-key guess) must NOT be full-coverage"
+    print("fullcoverage_survives_tone_press OK", ye_weight)
+
+
 def test_chi_reachable_with_tone():
     """吃 (ㄔ, tone1) must not be silently dropped by a pre-tone-scoring truncation.
 
@@ -380,6 +419,7 @@ def main() -> int:
     test_haoxiang_beats_haolashi()
     test_you_beats_rao()
     test_danshi_beats_chop()
+    test_fullcoverage_survives_tone_press()
     test_chi_reachable_with_tone()
     print("ALL PASSED")
     return 0

@@ -20,10 +20,18 @@ enum T9SortFilter {
 
     private static let toneKeys: Set<Character> = ["q", "w", "x", "y"]
 
-    static func sort(items: [Item], inputDigitsAndTones: String) -> [Candidate] {
+    /// - Parameters:
+    ///   - inputDigitsAndTones: digits + tones concatenated (see `combinedInput`), used only for
+    ///     the orphan-tone lookahead below.
+    ///   - digitsCount: T9 digit count alone. `item.coverage` is always in digit-only units (every
+    ///     caller sets it that way), so full-coverage MUST compare against this, not against
+    ///     `inputDigitsAndTones.count` — comparing against the combined length meant a candidate
+    ///     stopped being "full" the moment any tone key was pressed (coverage no longer >= the
+    ///     now-longer combined length), while FuzzyMatcher's one-digit-longer "missing key" guesses
+    ///     coincidentally became "full" instead and jumped to the front.
+    static func sort(items: [Item], inputDigitsAndTones: String, digitsCount: Int) -> [Candidate] {
         guard !items.isEmpty else { return [] }
         let input = Array(inputDigitsAndTones)
-        let inputLen = input.count
 
         var full: [Item] = []
         var buckets: [Int: [Item]] = [:]
@@ -32,8 +40,8 @@ enum T9SortFilter {
 
         for var item in items.prefix(80) {
             let cov = item.coverage
-            item.fullCoverage = cov >= inputLen
-            if !item.fullCoverage, cov < inputLen {
+            item.fullCoverage = cov == digitsCount
+            if !item.fullCoverage, cov < input.count {
                 let next = input[cov]
                 item.orphanTone = toneKeys.contains(next)
             }
