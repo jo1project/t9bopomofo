@@ -248,6 +248,14 @@ final class InputEngine: ObservableObject {
     // MARK: - Swift T9 ranking
 
     private func refreshSwiftCandidates() {
+        // Runs on every exit path (including the early-return for empty composing digits),
+        // so callers that only learn about new candidates through this callback — like the
+        // async lexicon-load completion below — still get the UI to refresh. Without it, the
+        // very first keystroke (typed before the ~187k-row dictionary finishes loading in the
+        // background) computed no candidates, and the load finishing afterward updated
+        // `candidates` with nobody told to redraw — it only became visible on the next key
+        // press, which happened to trigger its own reload from KeyboardViewController.
+        defer { onCandidatesChanged?() }
         preeditDisplay = composingDigits.isEmpty
             ? ""
             : composingDigits.map { T9KeyMap.keyLabels[$0] ?? String($0) }.joined(separator: "·")
