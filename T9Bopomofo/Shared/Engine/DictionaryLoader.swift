@@ -27,7 +27,26 @@ final class DictionaryLoader: @unchecked Sendable {
         rebuildIndex()
     }
 
+    /// Loads the build-time-generated binary index (see `Scripts/generate_lexicon_main.swift`)
+    /// when present — skips re-parsing ~5.6MB of YAML text on every cold extension launch,
+    /// which is where the real load latency was coming from. Falls back to the YAML parser
+    /// below when the binary wasn't baked into this bundle (e.g. a build that skipped the
+    /// prebuild script).
+    func loadBinary(from url: URL) throws {
+        let data = try Data(contentsOf: url)
+        entries = try PropertyListDecoder().decode([LexiconEntry].self, from: data)
+        rebuildIndex()
+    }
+
     func loadFromBundle(bundle: Bundle = .main) throws {
+        let binSubdirs: [String?] = ["chewing", nil]
+        for sub in binSubdirs {
+            if let binURL = bundle.url(forResource: "lexicon", withExtension: "bin", subdirectory: sub) {
+                try loadBinary(from: binURL)
+                return
+            }
+        }
+
         var urls: [URL] = []
         let names = ["taiwan_phrases.dict", "chewing_base.dict"]
         let subdirs: [String?] = ["chewing", nil]

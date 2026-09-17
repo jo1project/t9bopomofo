@@ -55,6 +55,38 @@ targets:
       - path: Resources/layouts
         buildPhase: resources
         type: folder
+    prebuildScripts:
+      - name: Generate lexicon.bin
+        inputFiles:
+          - $(SRCROOT)/Resources/chewing/chewing_base.dict.yaml
+          - $(SRCROOT)/Resources/chewing/taiwan_phrases.dict.yaml
+          - $(SRCROOT)/T9Bopomofo/Shared/Models/LexiconEntry.swift
+          - $(SRCROOT)/T9Bopomofo/Shared/Engine/T9KeyMap.swift
+          - $(SRCROOT)/T9Bopomofo/Shared/Engine/SyllableCodec.swift
+          - $(SRCROOT)/T9Bopomofo/Shared/Engine/DictionaryLoader.swift
+          - $(SRCROOT)/Scripts/generate_lexicon_main.swift
+        outputFiles:
+          - $(SRCROOT)/Resources/chewing/lexicon.bin
+        script: |
+          set -euo pipefail
+          GEN_SRC="$DERIVED_FILE_DIR/generate_lexicon.swift"
+          GEN_BIN="$DERIVED_FILE_DIR/generate_lexicon"
+          mkdir -p "$DERIVED_FILE_DIR"
+
+          # Concatenate the real runtime sources (not copies) so this generator can never
+          # drift from what DictionaryLoader actually does at runtime.
+          cat "$SRCROOT/T9Bopomofo/Shared/Models/LexiconEntry.swift" \
+              "$SRCROOT/T9Bopomofo/Shared/Engine/T9KeyMap.swift" \
+              "$SRCROOT/T9Bopomofo/Shared/Engine/SyllableCodec.swift" \
+              "$SRCROOT/T9Bopomofo/Shared/Engine/DictionaryLoader.swift" \
+              "$SRCROOT/Scripts/generate_lexicon_main.swift" > "$GEN_SRC"
+
+          swiftc -O "$GEN_SRC" -o "$GEN_BIN"
+
+          "$GEN_BIN" \
+              "$SRCROOT/Resources/chewing/chewing_base.dict.yaml" \
+              "$SRCROOT/Resources/chewing/taiwan_phrases.dict.yaml" \
+              "$SRCROOT/Resources/chewing/lexicon.bin"
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.jo1project.t9bopomofo.keyboard
       INFOPLIST_FILE: T9Bopomofo/Keyboard/Info.plist

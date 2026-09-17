@@ -1,6 +1,6 @@
 import Foundation
 
-struct LexiconEntry: Hashable, Sendable {
+struct LexiconEntry: Hashable, Codable, Sendable {
     let word: String
     let reading: String
     /// T9 digit sequence without tones.
