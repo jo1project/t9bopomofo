@@ -231,6 +231,7 @@ final class SymbolKeyboardView: UIView {
     private let symbolRows = [
         Array("-/:;()$&@\""),
         Array(".,?!'" ),
+        Array("#%^*+=_<>~"),
     ]
 
     private var page: Page = .digits
@@ -270,7 +271,6 @@ final class SymbolKeyboardView: UIView {
     required init?(coder: NSCoder) { fatalError() }
 
     private func buildDigitsPage() {
-        // 3x3 dial-pad grid, "0" centered on its own row like a phone keypad.
         for digits in ["123", "456", "789"] {
             let row = UIStackView()
             row.axis = .horizontal
@@ -282,15 +282,20 @@ final class SymbolKeyboardView: UIView {
             }
             digitsStack.addArrangedSubview(row)
         }
-        let zeroRow = UIStackView()
-        zeroRow.axis = .horizontal
-        zeroRow.spacing = KeyboardChrome.keySpacing
-        zeroRow.distribution = .fillEqually
-        zeroRow.addArrangedSubview(UIView())
-        zeroRow.addArrangedSubview(makeKey("0") { [weak self] in self?.onInsert?("0") })
-        zeroRow.addArrangedSubview(UIView())
-        digitsStack.addArrangedSubview(zeroRow)
-        digitsStack.addArrangedSubview(makeControlRow())
+        // Bottom row mirrors a phone dial pad's last row (*, 0, #), but with our
+        // mode-switch keys either side of 0 instead of unused punctuation.
+        let bottomRow = UIStackView()
+        bottomRow.axis = .horizontal
+        bottomRow.spacing = KeyboardChrome.keySpacing
+        bottomRow.distribution = .fillEqually
+        bottomRow.addArrangedSubview(makeKey("注", isFunction: true) { [weak self] in self?.onMode?(.zhuyin) })
+        bottomRow.addArrangedSubview(makeKey("EN", isFunction: true) { [weak self] in self?.onMode?(.english) })
+        bottomRow.addArrangedSubview(makeKey("0") { [weak self] in self?.onInsert?("0") })
+        let toggle = makeKey(toggleTitle, isFunction: true) { [weak self] in self?.togglePage() }
+        toggleButtons.append(toggle)
+        bottomRow.addArrangedSubview(toggle)
+        bottomRow.addArrangedSubview(makeKey("⌫", isFunction: true) { [weak self] in self?.onBackspace?() })
+        digitsStack.addArrangedSubview(bottomRow)
     }
 
     private func buildSymbolsPage() {
