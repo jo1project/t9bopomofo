@@ -81,7 +81,11 @@ targets:
               "$SRCROOT/T9Bopomofo/Shared/Engine/DictionaryLoader.swift" \
               "$SRCROOT/Scripts/generate_lexicon_main.swift" > "$GEN_SRC"
 
-          swiftc -O "$GEN_SRC" -o "$GEN_BIN"
+          # This target's build environment sets SDKROOT to the iOS SDK, but we're
+          # compiling a tool to run on the Mac build host right here — override it
+          # explicitly or swiftc tries to load the macOS stdlib from the iOS SDK path.
+          MACOS_SDK="$(xcrun --sdk macosx --show-sdk-path)"
+          swiftc -sdk "$MACOS_SDK" -O "$GEN_SRC" -o "$GEN_BIN"
 
           "$GEN_BIN" \
               "$SRCROOT/Resources/chewing/chewing_base.dict.yaml" \
