@@ -26,15 +26,16 @@ final class EnglishKeyboardView: UIView {
         super.init(frame: frame)
         backgroundColor = KeyboardChrome.background(for: traitCollection)
         root.axis = .vertical
-        root.spacing = 4
+        root.spacing = KeyboardChrome.rowSpacing
         root.distribution = .fillEqually
         root.translatesAutoresizingMaskIntoConstraints = false
         addSubview(root)
+        let inset = KeyboardChrome.edgeInset
         NSLayoutConstraint.activate([
-            root.topAnchor.constraint(equalTo: topAnchor),
-            root.leadingAnchor.constraint(equalTo: leadingAnchor),
-            root.trailingAnchor.constraint(equalTo: trailingAnchor),
-            root.bottomAnchor.constraint(equalTo: bottomAnchor),
+            root.topAnchor.constraint(equalTo: topAnchor, constant: inset),
+            root.leadingAnchor.constraint(equalTo: leadingAnchor, constant: inset),
+            root.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -inset),
+            root.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -inset),
         ])
         rebuild()
     }
@@ -57,7 +58,7 @@ final class EnglishKeyboardView: UIView {
         for (rowIndex, letters) in letterRows.enumerated() {
             let row = UIStackView()
             row.axis = .horizontal
-            row.spacing = 4
+            row.spacing = KeyboardChrome.keySpacing
             row.distribution = .fillEqually
 
             if rowIndex == 2 {
@@ -89,13 +90,13 @@ final class EnglishKeyboardView: UIView {
 
         let bottom = UIStackView()
         bottom.axis = .horizontal
-        bottom.spacing = 4
+        bottom.spacing = KeyboardChrome.keySpacing
         bottom.distribution = .fillEqually
         bottom.addArrangedSubview(makeKey("注", isFunction: true) { [weak self] in self?.onMode?(.zhuyin) })
         bottom.addArrangedSubview(makeKey("123", isFunction: true) { [weak self] in self?.onMode?(.symbols) })
         bottom.addArrangedSubview(makeKey("space", isFunction: false) { [weak self] in self?.onInsert?(" ") })
         bottom.addArrangedSubview(makeKey("🙂", isFunction: true) { [weak self] in self?.onMode?(.emoji) })
-        bottom.addArrangedSubview(makeKey("return", isFunction: true) { [weak self] in self?.onInsert?("\n") })
+        bottom.addArrangedSubview(makeKey("return", isFunction: true, isAction: true) { [weak self] in self?.onInsert?("\n") })
         root.addArrangedSubview(bottom)
 
         refreshShiftAppearance()
@@ -152,28 +153,31 @@ final class EnglishKeyboardView: UIView {
 
     private func refreshShiftAppearance() {
         guard let shiftButton else { return }
+        let traits = traitCollection
         switch shiftState {
         case .off:
-            shiftButton.backgroundColor = UIColor(white: 0.72, alpha: 1)
-            shiftButton.setTitleColor(.black, for: .normal)
+            shiftButton.backgroundColor = KeyboardChrome.keyFill(for: traits, style: .function)
+            shiftButton.setTitleColor(KeyboardChrome.keyTitle(for: traits, style: .function), for: .normal)
         case .once:
-            shiftButton.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.85)
+            shiftButton.backgroundColor = KeyboardChrome.accent.withAlphaComponent(0.75)
             shiftButton.setTitleColor(.white, for: .normal)
         case .caps:
-            shiftButton.backgroundColor = UIColor.systemBlue
+            shiftButton.backgroundColor = KeyboardChrome.accent
             shiftButton.setTitleColor(.white, for: .normal)
         }
         shiftButton.setTitle(shiftTitle(), for: .normal)
     }
 
-    private func makeKey(_ title: String, isFunction: Bool, addTap: Bool = true, _ action: (() -> Void)? = nil) -> UIButton {
+    private func makeKey(_ title: String, isFunction: Bool, isAction: Bool = false, addTap: Bool = true, _ action: (() -> Void)? = nil) -> UIButton {
         let b = UIButton(type: .system)
         b.setTitle(title, for: .normal)
         let traits = traitCollection
-        b.setTitleColor(KeyboardChrome.keyTitle(for: traits), for: .normal)
+        let style: KeyboardChrome.KeyFillStyle = isAction ? .action : (isFunction ? .function : .zhuyin)
+        b.setTitleColor(KeyboardChrome.keyTitle(for: traits, style: style), for: .normal)
         b.titleLabel?.font = .systemFont(ofSize: title == "space" || title == "return" ? 14 : 18, weight: .medium)
-        b.backgroundColor = KeyboardChrome.keyFill(for: traits, style: isFunction ? .function : .zhuyin)
-        b.layer.cornerRadius = 6
+        b.backgroundColor = KeyboardChrome.keyFill(for: traits, style: style)
+        b.layer.cornerRadius = 7
+        KeyboardChrome.applyKeyShadow(b.layer)
         if addTap, let action {
             b.addAction(UIAction { _ in
                 KeyboardHaptics.keyTap()
@@ -227,22 +231,24 @@ final class SymbolKeyboardView: UIView {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
+        backgroundColor = KeyboardChrome.background(for: traitCollection)
         let root = UIStackView()
         root.axis = .vertical
-        root.spacing = 4
+        root.spacing = KeyboardChrome.rowSpacing
         root.distribution = .fillEqually
         root.translatesAutoresizingMaskIntoConstraints = false
         addSubview(root)
+        let inset = KeyboardChrome.edgeInset
         NSLayoutConstraint.activate([
-            root.topAnchor.constraint(equalTo: topAnchor),
-            root.leadingAnchor.constraint(equalTo: leadingAnchor),
-            root.trailingAnchor.constraint(equalTo: trailingAnchor),
-            root.bottomAnchor.constraint(equalTo: bottomAnchor),
+            root.topAnchor.constraint(equalTo: topAnchor, constant: inset),
+            root.leadingAnchor.constraint(equalTo: leadingAnchor, constant: inset),
+            root.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -inset),
+            root.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -inset),
         ])
         for rowChars in symbols {
             let row = UIStackView()
             row.axis = .horizontal
-            row.spacing = 4
+            row.spacing = KeyboardChrome.keySpacing
             row.distribution = .fillEqually
             for ch in rowChars {
                 let s = String(ch)
@@ -252,24 +258,31 @@ final class SymbolKeyboardView: UIView {
         }
         let bottom = UIStackView()
         bottom.axis = .horizontal
-        bottom.spacing = 4
+        bottom.spacing = KeyboardChrome.keySpacing
         bottom.distribution = .fillEqually
-        bottom.addArrangedSubview(makeKey("注") { [weak self] in self?.onMode?(.zhuyin) })
-        bottom.addArrangedSubview(makeKey("EN") { [weak self] in self?.onMode?(.english) })
+        bottom.addArrangedSubview(makeKey("注", isFunction: true) { [weak self] in self?.onMode?(.zhuyin) })
+        bottom.addArrangedSubview(makeKey("EN", isFunction: true) { [weak self] in self?.onMode?(.english) })
         bottom.addArrangedSubview(makeKey("。") { [weak self] in self?.onInsert?("。") })
         bottom.addArrangedSubview(makeKey("，") { [weak self] in self?.onInsert?("，") })
-        bottom.addArrangedSubview(makeKey("⌫") { [weak self] in self?.onBackspace?() })
+        bottom.addArrangedSubview(makeKey("⌫", isFunction: true) { [weak self] in self?.onBackspace?() })
         root.addArrangedSubview(bottom)
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        backgroundColor = KeyboardChrome.background(for: traitCollection)
     }
 
     required init?(coder: NSCoder) { fatalError() }
 
-    private func makeKey(_ title: String, _ action: @escaping () -> Void) -> UIButton {
+    private func makeKey(_ title: String, isFunction: Bool = false, _ action: @escaping () -> Void) -> UIButton {
         let b = UIButton(type: .system)
         b.setTitle(title, for: .normal)
-        b.setTitleColor(KeyboardChrome.keyTitle(for: traitCollection), for: .normal)
-        b.backgroundColor = KeyboardChrome.keyFill(for: traitCollection, style: .zhuyin)
-        b.layer.cornerRadius = 6
+        let style: KeyboardChrome.KeyFillStyle = isFunction ? .function : .zhuyin
+        b.setTitleColor(KeyboardChrome.keyTitle(for: traitCollection, style: style), for: .normal)
+        b.backgroundColor = KeyboardChrome.keyFill(for: traitCollection, style: style)
+        b.layer.cornerRadius = 7
+        KeyboardChrome.applyKeyShadow(b.layer)
         b.addAction(UIAction { _ in
             KeyboardHaptics.keyTap()
             KeyboardSounds.keyTap()
@@ -322,24 +335,26 @@ final class EmojiKeyboardView: UIView {
 
         let bottom = UIStackView()
         bottom.axis = .horizontal
-        bottom.spacing = 4
+        bottom.spacing = KeyboardChrome.keySpacing
         bottom.distribution = .fillEqually
         bottom.translatesAutoresizingMaskIntoConstraints = false
 
         let back = UIButton(type: .system)
         back.setTitle("注音", for: .normal)
-        back.setTitleColor(KeyboardChrome.keyTitle(for: traitCollection), for: .normal)
+        back.setTitleColor(KeyboardChrome.keyTitle(for: traitCollection, style: .function), for: .normal)
         back.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
         back.backgroundColor = KeyboardChrome.keyFill(for: traitCollection, style: .function)
-        back.layer.cornerRadius = 6
+        back.layer.cornerRadius = 7
+        KeyboardChrome.applyKeyShadow(back.layer)
         back.addAction(UIAction { [weak self] _ in self?.onMode?(.zhuyin) }, for: .touchUpInside)
 
         let en = UIButton(type: .system)
         en.setTitle("EN", for: .normal)
-        en.setTitleColor(KeyboardChrome.keyTitle(for: traitCollection), for: .normal)
+        en.setTitleColor(KeyboardChrome.keyTitle(for: traitCollection, style: .function), for: .normal)
         en.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
         en.backgroundColor = KeyboardChrome.keyFill(for: traitCollection, style: .function)
-        en.layer.cornerRadius = 6
+        en.layer.cornerRadius = 7
+        KeyboardChrome.applyKeyShadow(en.layer)
         en.addAction(UIAction { [weak self] _ in self?.onMode?(.english) }, for: .touchUpInside)
 
         bottom.addArrangedSubview(back)

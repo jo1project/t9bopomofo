@@ -31,7 +31,7 @@ final class KeyboardViewController: UIInputViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = UIColor(white: 0.82, alpha: 1)
+        view.backgroundColor = KeyboardChrome.background(for: traitCollection)
 
         candidateBar.translatesAutoresizingMaskIntoConstraints = false
         keyboardContainer.translatesAutoresizingMaskIntoConstraints = false
@@ -90,6 +90,11 @@ final class KeyboardViewController: UIInputViewController {
         reloadCandidates()
 
         engine.prepare(bundle: Bundle(for: KeyboardViewController.self))
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        view.backgroundColor = KeyboardChrome.background(for: traitCollection)
     }
 
     override func viewWillAppear(_ animated: Bool) {

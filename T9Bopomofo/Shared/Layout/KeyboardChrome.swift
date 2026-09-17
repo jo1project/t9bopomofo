@@ -40,6 +40,15 @@ enum KeyboardSounds {
 }
 
 enum KeyboardChrome {
+    /// Brand accent (orange) — used sparingly for action keys / highlights.
+    static let accent = UIColor.systemOrange
+
+    // MARK: - Shared row layout (kept identical across zhuyin/English/symbol
+    // keyboards so switching between them doesn't visibly jump).
+    static let rowSpacing: CGFloat = 4
+    static let keySpacing: CGFloat = 4
+    static let edgeInset: CGFloat = 2
+
     static func background(for traits: UITraitCollection) -> UIColor {
         traits.userInterfaceStyle == .dark
             ? UIColor(white: 0.18, alpha: 1)
@@ -52,17 +61,37 @@ enum KeyboardChrome {
         case .zhuyin:
             return dark ? UIColor(white: 0.32, alpha: 1) : .white
         case .tone:
-            return dark ? UIColor(white: 0.28, alpha: 1) : UIColor(white: 0.92, alpha: 1)
+            return dark ? accent.withAlphaComponent(0.28) : accent.withAlphaComponent(0.16)
         case .function:
-            return dark ? UIColor(white: 0.24, alpha: 1) : UIColor(white: 0.72, alpha: 1)
+            return dark ? UIColor(white: 0.10, alpha: 1) : UIColor(white: 0.60, alpha: 1)
+        case .action:
+            return accent
         }
     }
 
-    static func keyTitle(for traits: UITraitCollection) -> UIColor {
-        traits.userInterfaceStyle == .dark ? .white : .black
+    static func keyTitle(for traits: UITraitCollection, style: KeyFillStyle = .zhuyin) -> UIColor {
+        let dark = traits.userInterfaceStyle == .dark
+        switch style {
+        case .tone:
+            return dark ? accent : UIColor(red: 0.62, green: 0.28, blue: 0.0, alpha: 1)
+        case .action:
+            return .white
+        case .zhuyin, .function:
+            return dark ? .white : .black
+        }
+    }
+
+    /// Subtle "pressable" shadow — apply to every key layer (zhuyin/English/symbol) so
+    /// they read as raised keys instead of flat color rectangles.
+    static func applyKeyShadow(_ layer: CALayer) {
+        layer.shadowColor = UIColor.black.cgColor
+        layer.shadowOpacity = 0.16
+        layer.shadowOffset = CGSize(width: 0, height: 1.5)
+        layer.shadowRadius = 1.5
+        layer.masksToBounds = false
     }
 
     enum KeyFillStyle {
-        case zhuyin, tone, function
+        case zhuyin, tone, function, action
     }
 }

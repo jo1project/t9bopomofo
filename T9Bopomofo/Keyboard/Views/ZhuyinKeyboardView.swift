@@ -4,12 +4,12 @@ final class ZhuyinKeyboardView: UIView {
     var onAction: ((ZhuyinPhoneLayout.KeyAction) -> Void)?
     var onMode: (() -> Void)?
 
-    private let interKey: CGFloat = 5
-    private let interRow: CGFloat = 4
+    private let interKey: CGFloat = KeyboardChrome.keySpacing
+    private let interRow: CGFloat = KeyboardChrome.rowSpacing
     private let sideGapBeforeFunc: CGFloat = 8
     private let sideFrac: CGFloat = 0.155
     private let midFrac: CGFloat = 0.230
-    private let edgeInset: CGFloat = 2
+    private let edgeInset: CGFloat = KeyboardChrome.edgeInset
 
     private var keyButtons: [KeyButton] = []
     private let separator = UIView()
@@ -49,9 +49,11 @@ final class ZhuyinKeyboardView: UIView {
     private func buildKeys() {
         for row in ZhuyinPhoneLayout.rows {
             for key in row.keys {
+                let isAction = Self.isActionKey(key.action)
                 let isFunc = Self.isFunctionKey(key.action)
                 let isTone = Self.isToneKey(key.action)
-                let btn = KeyButton(label: key.label, action: key.action, style: isFunc ? .function : (isTone ? .tone : .zhuyin))
+                let style: KeyButton.Style = isAction ? .action : (isFunc ? .function : (isTone ? .tone : .zhuyin))
+                let btn = KeyButton(label: key.label, action: key.action, style: style)
                 btn.onTap = { [weak self] action in
                     self?.dismissCallout()
                     self?.onAction?(action)
@@ -84,15 +86,21 @@ final class ZhuyinKeyboardView: UIView {
         }
     }
 
+    private static func isActionKey(_ action: ZhuyinPhoneLayout.KeyAction) -> Bool {
+        if case .enter = action { return true }
+        return false
+    }
+
     private static func isFunctionKey(_ action: ZhuyinPhoneLayout.KeyAction) -> Bool {
         switch action {
-        case .backspace, .numberPad, .symbol, .enter: return true
+        case .backspace, .numberPad, .symbol: return true
         default: return false
         }
     }
 
     private static func isToneKey(_ action: ZhuyinPhoneLayout.KeyAction) -> Bool {
         if case .tone = action { return true }
+        if case .toneNeutral = action { return true }
         return false
     }
 
@@ -200,6 +208,7 @@ final class KeyButton: UIButton {
         case zhuyin
         case tone
         case function
+        case action
     }
 
     var onTap: ((ZhuyinPhoneLayout.KeyAction) -> Void)?
@@ -220,11 +229,11 @@ final class KeyButton: UIButton {
         self.keyAction = action
         super.init(frame: .zero)
         setTitle(label, for: .normal)
-        setTitleColor(.black, for: .normal)
         let fontSize: CGFloat
         switch style {
         case .tone: fontSize = 26
-        case .function: fontSize = label == "換行" ? 15 : 16
+        case .function: fontSize = 16
+        case .action: fontSize = 15
         case .zhuyin:
             if label.contains("/") {
                 fontSize = 14
@@ -245,10 +254,7 @@ final class KeyButton: UIButton {
         keyStyle = style
         applyChrome(traits: traitCollection)
         layer.cornerRadius = 7
-        layer.shadowColor = UIColor.black.cgColor
-        layer.shadowOpacity = 0.14
-        layer.shadowOffset = CGSize(width: 0, height: 1)
-        layer.shadowRadius = 0.5
+        KeyboardChrome.applyKeyShadow(layer)
         addTarget(self, action: #selector(tapped), for: .touchUpInside)
     }
 
@@ -260,9 +266,10 @@ final class KeyButton: UIButton {
         case .zhuyin: fill = .zhuyin
         case .tone: fill = .tone
         case .function: fill = .function
+        case .action: fill = .action
         }
         backgroundColor = KeyboardChrome.keyFill(for: traits, style: fill)
-        setTitleColor(KeyboardChrome.keyTitle(for: traits), for: .normal)
+        setTitleColor(KeyboardChrome.keyTitle(for: traits, style: fill), for: .normal)
     }
 
     required init?(coder: NSCoder) { fatalError() }
