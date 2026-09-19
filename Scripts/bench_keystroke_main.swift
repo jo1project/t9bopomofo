@@ -27,31 +27,51 @@ do {
 }
 
 var sink = 0
-func keystroke(_ digits: String) {
-    for (_, es) in lexicon.prefixSpans(of: digits) { sink &+= es.count }
+let stepNames = ["prefixSpans", "bestPhrase", "nBest", "fuzzy"]
+var spanEntries = 0  // entries prefixSpans returned on the last keystroke = how many candidates InputEngine builds+scores
+
+func keystroke(_ digits: String) -> [Double] {
+    var t: [Double] = []
+    var t0 = CFAbsoluteTimeGetCurrent()
+    func lap() { let n = CFAbsoluteTimeGetCurrent(); t.append((n - t0) * 1000); t0 = n }
+    var count = 0
+    for (_, es) in lexicon.prefixSpans(of: digits) { count += es.count }
+    spanEntries = count
+    sink &+= count
+    lap()
     sink &+= PhraseSegmenter.bestPhrase(digits: digits, lexicon: lexicon)?.weight ?? 0
+    lap()
     sink &+= PhraseSegmenter.nBest(digits: digits, lexicon: lexicon, limit: 8).count
+    lap()
     sink &+= FuzzyMatcher.fuzzy(digits: digits, lexicon: lexicon, maxDistance: 1, limit: 12).count
+    lap()
+    return t
 }
 
 let sequences = ["139625807", "6398", "3131", "7852049"]  // arbitrary but realistic multi-key inputs
 let rounds = 10
-var perKey: [Int: [Double]] = [:]  // keys typed so far -> ms samples
+var perKey: [Int: [[Double]]] = [:]  // keys typed so far -> per-step ms samples
+var entryCounts: [Int: [Int]] = [:]
 for _ in 0..<rounds {
     for seq in sequences {
         for n in 1...seq.count {
             let digits = String(seq.prefix(n))
-            let t0 = CFAbsoluteTimeGetCurrent()
-            keystroke(digits)
-            perKey[n, default: []].append((CFAbsoluteTimeGetCurrent() - t0) * 1000)
+            perKey[n, default: []].append(keystroke(digits))
+            entryCounts[n, default: []].append(spanEntries)
         }
     }
 }
 
-print("[bench:\(label)] per-keystroke ms by number of digits typed (median / max over \(rounds * sequences.count) samples)")
+func med(_ xs: [Double]) -> Double { let s = xs.sorted(); return s[s.count / 2] }
+print("[bench:\(label)] per-keystroke ms by number of digits typed, median over \(rounds * sequences.count) samples: total = \(stepNames.joined(separator: " + "))")
+var totals: [Double] = []
 for n in perKey.keys.sorted() {
-    let s = perKey[n]!.sorted()
-    print(String(format: "[bench:%@]   %d digits: median %.2fms  max %.2fms", label, n, s[s.count / 2], s.last!))
+    let samples = perKey[n]!
+    let totalsN = samples.map { $0.reduce(0, +) }
+    totals.append(contentsOf: totalsN)
+    let steps = (0..<stepNames.count).map { i in String(format: "%.2f", med(samples.map { $0[i] })) }
+    print(String(format: "[bench:%@]   %d digits: total %.2fms max %.2fms = %@  | prefixSpans entries (median) %d",
+                 label, n, med(totalsN), totalsN.max()!, steps.joined(separator: " + "), entryCounts[n]!.sorted()[entryCounts[n]!.count / 2]))
 }
-let all = perKey.values.flatMap { $0 }.sorted()
+let all = totals.sorted()
 print(String(format: "[bench:%@] overall: median %.2fms  p95 %.2fms  max %.2fms (sink=%d)", label, all[all.count / 2], all[all.count * 95 / 100], all.last!, sink))
