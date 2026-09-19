@@ -47,6 +47,21 @@ guard args.count == 3 else {
     exit(1)
 }
 
+// MARK: - 0. SyllableCodec sanity (one-shot check of the neutral-tone + String syllableLengths change)
+
+do {
+    func check(_ reading: String, tones: String, lengths: String, digits: String) {
+        let r = SyllableCodec.encodeReading(reading)
+        let ok = r.tones == tones && r.syllableLengths == lengths && r.digits == digits
+        log("0. codec \(reading): digits=\(r.digits) tones=\(r.tones) lengths=\(r.syllableLengths) \(ok ? "OK" : "FAIL (want digits=\(digits) tones=\(tones) lengths=\(lengths))")")
+        if !ok { exit(1) }
+    }
+    check("ㄉㄜ˙", tones: "˙", lengths: "2", digits: "17")                    // neutral: was "q" (tone 1)
+    check("ㄅㄨˋ ㄒㄧㄥˊ ㄌㄚ˙", tones: "yw˙", lengths: "232", digits: "1986v01")
+    check("ㄅㄚ", tones: "q", lengths: "2", digits: "11")                    // bare syllable is still tone 1
+    check("ㄕㄣˊ ㄇㄜ˙", tones: "w˙", lengths: "22", digits: "96" + "77")
+}
+
 // MARK: - 1. AppSettings getter I/O
 
 struct Payload: Codable {
