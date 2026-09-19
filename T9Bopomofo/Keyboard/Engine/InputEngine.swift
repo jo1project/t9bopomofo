@@ -119,6 +119,9 @@ final class InputEngine: ObservableObject {
         return commitSuggestion(candidate.text)
     }
 
+    /// Writes pending user-dictionary changes; the keyboard is going away.
+    func flushUserLexicon() { userLexicon.flush() }
+
     private func commitSuggestion(_ text: String) -> String {
         guard !text.isEmpty else { return "" }
         userLexicon.recordCommit(text, previous: lastCommitted.isEmpty ? nil : lastCommitted)
@@ -354,15 +357,16 @@ final class InputEngine: ObservableObject {
     /// (e.g. tone pressed right after the first syllable, more digits typed after that for
     /// a second, untoned syllable); assuming the last-pressed tone belongs to the last
     /// syllable silently misattributes it whenever the counts don't line up.
-    private func toneScore(tones entryTones: String, syllableLengths: [Int]) -> Double {
+    private func toneScore(tones entryTones: String, syllableLengths: String) -> Double {
         guard !toneMarks.isEmpty else { return 0 }
         let toneChars = Array(entryTones)
-        guard toneChars.count == syllableLengths.count else { return 0 }
+        let lengths = syllableLengths.utf8  // one ASCII digit per syllable
+        guard toneChars.count == lengths.count else { return 0 }
 
         var boundaryForDigits: [Int: Character] = [:]
         var boundary = 0
-        for (i, len) in syllableLengths.enumerated() {
-            boundary += len
+        for (i, len) in lengths.enumerated() {
+            boundary += Int(len) - 48  // ASCII '0'
             boundaryForDigits[boundary] = toneChars[i]
         }
 

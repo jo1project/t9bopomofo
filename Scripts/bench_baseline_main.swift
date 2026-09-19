@@ -216,15 +216,15 @@ do {
     do {
         let a = footprintMB()
         var arrays: [[Int]] = []
-        let t = timeMs { arrays = entries.map { $0.syllableLengths.map { $0 } } }  // .map forces a fresh buffer
+        let t = timeMs { arrays = entries.map { $0.syllableLengths.utf8.map { Int($0) - 48 } } }  // replica of the old [Int] field
         let c = footprintMB()
-        log("3. syllableLengths as [Int] x\(arrays.count): \(String(format: "%.1fms", t)), footprint +\(String(format: "%.1f", c - a))MB")
+        log("3. syllableLengths, old [Int] replica x\(arrays.count): \(String(format: "%.1fms", t)), footprint +\(String(format: "%.1f", c - a))MB")
         arrays = []
         let d = footprintMB()
         var strs: [String] = []
-        let t2 = timeMs { strs = entries.map { String(decoding: $0.syllableLengths.map { UInt8(48 + $0) }, as: UTF8.self) } }
+        let t2 = timeMs { strs = entries.map { $0.syllableLengths } }  // the current String field
         let e = footprintMB()
-        log("3. syllableLengths as String x\(strs.count): \(String(format: "%.1fms", t2)), footprint +\(String(format: "%.1f", e - d))MB")
+        log("3. syllableLengths, current String x\(strs.count): \(String(format: "%.1fms", t2)), footprint +\(String(format: "%.1f", e - d))MB")
         strs = []
     }
     withExtendedLifetime(lexicon) {}

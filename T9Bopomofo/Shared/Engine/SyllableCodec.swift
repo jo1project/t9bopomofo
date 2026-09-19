@@ -42,15 +42,15 @@ enum SyllableCodec {
         return EncodedSyllable(digits: digits, tone: tone)
     }
 
-    static func encodeReading(_ reading: String) -> (digits: String, tones: String, syllableLengths: [Int]) {
+    static func encodeReading(_ reading: String) -> (digits: String, tones: String, syllableLengths: String) {
         var digits = ""
         var tones = ""
-        var syllableLengths: [Int] = []
+        var syllableLengths = ""  // one digit char per syllable; a zhuyin syllable is at most 4 keys
         for part in reading.split(separator: " ") {
             guard let enc = encodeSyllable(String(part)) else { continue }
             digits += enc.digits
             tones.append(enc.tone ?? "-")
-            syllableLengths.append(enc.digits.count)
+            syllableLengths += String(enc.digits.count)
         }
         return (digits, tones, syllableLengths)
     }

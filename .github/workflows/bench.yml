@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - bench/baseline
+      - perf/review-fixes
 
 permissions:
   contents: read

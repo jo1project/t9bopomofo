@@ -38,6 +38,40 @@ final class UserLexicon: @unchecked Sendable {
         }
         recent.append(word)
         if recent.count > 64 { recent.removeFirst(recent.count - 64) }
+        Self.prune(&freq, max: Self.maxFreq)
+        Self.prune(&bigram, max: Self.maxBigram)
+        scheduleFlush()
+    }
+
+    // Measured (Scripts/bench_baseline_main.swift): a commit rewrote both whole dictionaries into
+    // UserDefaults, 4ms at 2k entries, 47ms at 10k, 370ms at 50k; the iCloud snapshot passed its
+    // ~1MB KVS limit around 30k entries. Bounded size + one write after typing goes idle fixes both.
+    private static let maxFreq = 3_000
+    private static let maxBigram = 5_000
+    private var flushWork: DispatchWorkItem?
+
+    /// Keeps the highest-count entries. Only sorts once 25% over `max`, so a full dictionary
+    /// doesn't re-sort on every commit.
+    /// ponytail: least-frequent eviction, ties arbitrary — a brand-new word (count 1) can be evicted
+    /// before its second use; add a recency tiebreak if that shows up in practice.
+    private static func prune(_ d: inout [String: Int], max: Int) {
+        guard d.count > max + max / 4 else { return }
+        d = Dictionary(uniqueKeysWithValues: d.sorted { $0.value > $1.value }.prefix(max).map { ($0.key, $0.value) })
+    }
+
+    private func scheduleFlush() {
+        flushWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.flush() }
+        flushWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: work)
+    }
+
+    /// Writes pending commits now. Call when the keyboard goes away: a suspended extension
+    /// may never run the 2s timer.
+    func flush() {
+        guard let work = flushWork else { return }
+        work.cancel()
+        flushWork = nil
         persist()
         if AppSettings.shared.iCloudAutoBackup {
             backupToiCloud()
@@ -103,6 +137,8 @@ final class UserLexicon: @unchecked Sendable {
             bigram = snapshot.bigram
             recent = snapshot.recent
         }
+        Self.prune(&freq, max: Self.maxFreq)
+        Self.prune(&bigram, max: Self.maxBigram)
         persist()
     }
 

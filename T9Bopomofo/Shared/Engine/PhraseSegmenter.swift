@@ -10,7 +10,7 @@ enum PhraseSegmenter {
         var text: String { entries.map(\.word).joined() }
         var reading: String { entries.map(\.reading).joined(separator: " ") }
         var tones: String { entries.map(\.tones).joined() }
-        var syllableLengths: [Int] { entries.flatMap(\.syllableLengths) }
+        var syllableLengths: String { entries.map(\.syllableLengths).joined() }
 
         static let empty = Path(entries: [], weight: 0)
 

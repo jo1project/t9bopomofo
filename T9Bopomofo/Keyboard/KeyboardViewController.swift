@@ -111,6 +111,11 @@ final class KeyboardViewController: UIInputViewController {
         }
     }
 
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        engine.flushUserLexicon()
+    }
+
     // MARK: - English spelling suggestions (UITextChecker, opt-in via candidate bar tap)
 
     private static let textChecker = UITextChecker()
