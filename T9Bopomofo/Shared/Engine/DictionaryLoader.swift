@@ -2,8 +2,6 @@ import Foundation
 
 final class DictionaryLoader: @unchecked Sendable {
     private(set) var entries: [LexiconEntry] = []
-    /// Prefix index: T9 digits → entry indices
-    private var prefixBuckets: [String: [Int]] = [:]
     /// Full T9 string → entry indices, for O(1) exact() lookups.
     private var exactIndex: [String: [Int]] = [:]
 
@@ -99,24 +97,6 @@ final class DictionaryLoader: @unchecked Sendable {
         }
     }
 
-    func candidates(forDigits digits: String, limit: Int = 40) -> [LexiconEntry] {
-        guard let first = digits.first else { return [] }
-        ensureShardLoaded(first)
-        let key = String(digits.prefix(min(4, digits.count)))
-        let idxs = prefixBuckets[key] ?? entries.indices.filter { entries[$0].t9.hasPrefix(String(digits.prefix(1))) }
-        var out: [LexiconEntry] = []
-        out.reserveCapacity(limit)
-        for i in idxs {
-            let e = entries[i]
-            // Longer completions OR exact OR shorter spans that are prefixes of input
-            if e.t9 == digits || e.t9.hasPrefix(digits) || digits.hasPrefix(e.t9) {
-                out.append(e)
-                if out.count >= limit * 4 { break }
-            }
-        }
-        return Array(out.sorted { $0.weight > $1.weight }.prefix(limit))
-    }
-
     /// All lexicon hits whose T9 exactly equals a prefix of `digits` (Rime partial spans).
     ///
     /// Does NOT truncate per-span hits: many zhuyin symbols share a T9 key (e.g. ㄔㄘㄣㄧ
@@ -196,7 +176,6 @@ final class DictionaryLoader: @unchecked Sendable {
     }
 
     private func rebuildIndex() {
-        prefixBuckets.removeAll(keepingCapacity: true)
         exactIndex.removeAll(keepingCapacity: true)
         for (idx, e) in entries.enumerated() {
             indexEntry(e, at: idx)
@@ -204,14 +183,6 @@ final class DictionaryLoader: @unchecked Sendable {
     }
 
     private func indexEntry(_ e: LexiconEntry, at idx: Int) {
-        let p4 = String(e.t9.prefix(min(4, e.t9.count)))
-        prefixBuckets[p4, default: []].append(idx)
-        if e.t9.count >= 2 {
-            let p2 = String(e.t9.prefix(2))
-            if p2 != p4 { prefixBuckets[p2, default: []].append(idx) }
-        }
-        let p1 = String(e.t9.prefix(1))
-        prefixBuckets[p1, default: []].append(idx)
         exactIndex[e.t9, default: []].append(idx)
     }
 }

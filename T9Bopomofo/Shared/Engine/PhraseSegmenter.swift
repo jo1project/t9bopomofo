@@ -30,7 +30,6 @@ enum PhraseSegmenter {
 
     static func bestPhrase(digits: String, lexicon: DictionaryLoader) -> LexiconEntry? {
         lexicon.exact(digits: digits).first
-            ?? lexicon.candidates(forDigits: digits, limit: 20).first { $0.t9 == digits }
     }
 
     /// Beam search for alternative segmentations (e.g. 不是+不行 vs 不是+不幸).

@@ -27,8 +27,6 @@ final class KeyboardViewController: UIInputViewController {
     private let collapsedHeight: CGFloat = 268
     private let expandedHeight: CGFloat = 360
 
-    private var reloadTask: DispatchWorkItem?
-
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = KeyboardChrome.background(for: traitCollection)
@@ -165,15 +163,6 @@ final class KeyboardViewController: UIInputViewController {
             status: engine.isComposing ? "" : engine.predictionStatus
         )
         candidatePanel?.setCandidates(engine.candidates)
-    }
-
-    private func reloadCandidatesDebounced(delay: TimeInterval = 0.02) {  // ponytail: 50ms->20ms for faster typing
-        reloadTask?.cancel()
-        let task = DispatchWorkItem { [weak self] in
-            self?.reloadCandidates()
-        }
-        reloadTask = task
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: task)
     }
 
     /// After committing text, ask LLM using document tail (not only the last word).
@@ -367,10 +356,9 @@ final class KeyboardViewController: UIInputViewController {
         case .tone(let ch):
             engine.tapTone(ch)
         case .toneNeutral:
-            // Soft tone: omit tone marker (missing tone = 輕聲).
-            break
-        case .exact(let token, _):
-            engine.tapExactToken(token)
+            engine.tapTone("˙")
+        case .exact(let token, let label):
+            engine.tapExactToken(token, zhuyin: label.first ?? token)
         case .backspace:
             if !engine.isComposing {
                 textDocumentProxy.deleteBackward()
@@ -385,6 +373,7 @@ final class KeyboardViewController: UIInputViewController {
         case .symbol(let s):
             let out = engine.handleSymbol(s)
             textDocumentProxy.insertText(out)
+            reloadCandidates()
         case .space:
             // ponytail: space = tone1 when composing, else space
             if engine.isComposing {
@@ -392,10 +381,12 @@ final class KeyboardViewController: UIInputViewController {
             } else {
                 let out = engine.handleSpace()
                 textDocumentProxy.insertText(out)
+                reloadCandidates()
             }
         case .enter:
             let out = engine.handleReturn()
             textDocumentProxy.insertText(out)
+            reloadCandidates()
         case .switchEnglish:
             mode = .english
             collapseCandidates()
@@ -412,7 +403,7 @@ final class KeyboardViewController: UIInputViewController {
         }
         // ponytail: update space key label dynamically
         zhuyinKeyboard?.updateSpaceKey(isComposing: engine.isComposing)
-        // Use debounced reload for smoother typing
-        reloadCandidatesDebounced()
+        // The engine's onCandidatesChanged already reloaded for every path that changes candidates
+        // (t9/tone/exact/backspace/space-while-composing); symbol/space/enter reload above.
     }
 }

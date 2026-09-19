@@ -18,6 +18,9 @@ final class InputEngine: ObservableObject {
     /// lets tone scoring match a press to the exact syllable it was meant for (by digit
     /// position) instead of assuming presses arrive in strict per-syllable left-to-right order.
     private var toneMarks: [(digits: Int, tone: Character)] = []
+    /// Zhuyin symbol the user long-pressed at each composing-digit position (e.g. ㄅ rather than
+    /// ㄉ/ㄚ on key 1). Candidates that read differently at that position are dropped.
+    private var exactTokens: [Int: Character] = [:]
     private var candidateLimit = 40  // ponytail: 12->40 so rare chars appear
     private var llmTask: Task<Void, Never>?
     private var lastPredictionContext: String = ""
@@ -85,8 +88,9 @@ final class InputEngine: ObservableObject {
         refreshSwiftCandidates()
     }
 
-    func tapExactToken(_ token: Character) {
+    func tapExactToken(_ token: Character, zhuyin: Character) {
         if let key = T9KeyMap.tokenToKey[token] {
+            exactTokens[composingDigits.count] = zhuyin
             composingDigits.append(key)
         }
         refreshSwiftCandidates()
@@ -98,6 +102,7 @@ final class InputEngine: ObservableObject {
             composingTones = String(toneMarks.map(\.tone))
         } else if !composingDigits.isEmpty {
             composingDigits.removeLast()
+            exactTokens[composingDigits.count] = nil
         }
         refreshSwiftCandidates()
     }
@@ -106,6 +111,7 @@ final class InputEngine: ObservableObject {
         composingDigits = ""
         composingTones = ""
         toneMarks = []
+        exactTokens = [:]
         candidates = []
         preeditDisplay = ""
     }
@@ -233,7 +239,9 @@ final class InputEngine: ObservableObject {
         defer { onCandidatesChanged?() }
         preeditDisplay = composingDigits.isEmpty
             ? ""
-            : composingDigits.map { T9KeyMap.keyLabels[$0] ?? String($0) }.joined(separator: "·")
+            : composingDigits.enumerated()
+                .map { i, d in exactTokens[i].map { String($0) } ?? T9KeyMap.keyLabels[d] ?? String(d) }
+                .joined(separator: "·")
 
         guard !composingDigits.isEmpty else {
             if !lastCommitted.isEmpty {
@@ -252,7 +260,7 @@ final class InputEngine: ObservableObject {
         let inputStream = T9SortFilter.combinedInput(digits: digits, tones: composingTones)
 
         for (span, entries) in lexicon.prefixSpans(of: digits) {
-            for e in entries {
+            for e in entries where !violatesExactTokens(e.reading) {
                 let toneBonus = toneScore(tones: e.tones, syllableLengths: e.syllableLengths)
                 let userBoost = userLexicon.boost(for: e.word, previous: lastCommitted.isEmpty ? nil : lastCommitted)
                 let score = Double(e.weight) + toneBonus + userBoost
@@ -272,7 +280,8 @@ final class InputEngine: ObservableObject {
             }
         }
 
-        if let phrase = PhraseSegmenter.bestPhrase(digits: digits, lexicon: lexicon) {
+        if let phrase = PhraseSegmenter.bestPhrase(digits: digits, lexicon: lexicon),
+           !violatesExactTokens(phrase.reading) {
             let toneBonus = toneScore(tones: phrase.tones, syllableLengths: phrase.syllableLengths)
             let userBoost = userLexicon.boost(for: phrase.word, previous: lastCommitted.isEmpty ? nil : lastCommitted)
             items.append(T9SortFilter.Item(
@@ -299,7 +308,7 @@ final class InputEngine: ObservableObject {
             // ponytail: 0.75 is a tuned constant, not a language model — revisit if mis-ranks show up.
             let segCount = Double(max(0, path.entries.count - 1))
             let segPenalty = Double(path.weight) * segCount * 0.75
-            items.append(T9SortFilter.Item(
+            let pathItem = T9SortFilter.Item(
                 candidate: Candidate(
                     id: "seg-\(pi)-\(path.text)",
                     text: path.text,
@@ -310,8 +319,9 @@ final class InputEngine: ObservableObject {
                 coverage: digits.count,
                 fullCoverage: true,
                 orphanTone: false
-            ))
-            if let first = path.entries.first, path.entries.count > 1 {
+            )
+            if !violatesExactTokens(path.reading) { items.append(pathItem) }
+            if let first = path.entries.first, path.entries.count > 1, !violatesExactTokens(first.reading) {
                 items.append(T9SortFilter.Item(
                     candidate: Candidate(
                         id: "seg1-\(pi)-\(first.word)",
@@ -328,7 +338,8 @@ final class InputEngine: ObservableObject {
         }
 
         if AppSettings.shared.fuzzyNeighborEffective {
-            for m in FuzzyMatcher.fuzzy(digits: digits, lexicon: lexicon, maxDistance: 1, limit: 12) {
+            for m in FuzzyMatcher.fuzzy(digits: digits, lexicon: lexicon, maxDistance: 1, limit: 12)
+            where !violatesExactTokens(m.entry.reading) {
                 let toneBonus = toneScore(tones: m.entry.tones, syllableLengths: m.entry.syllableLengths) * 0.5
                 let userBoost = userLexicon.boost(for: m.entry.word, previous: lastCommitted.isEmpty ? nil : lastCommitted)
                 items.append(T9SortFilter.Item(
@@ -349,6 +360,14 @@ final class InputEngine: ObservableObject {
         items.sort { $0.candidate.score > $1.candidate.score }
         let sorted = T9SortFilter.sort(items: items, inputDigitsAndTones: inputStream, digitsCount: digits.count)
         candidates = Array(sorted.prefix(candidateLimit))
+    }
+
+    /// True if `reading` has a different zhuyin symbol than the one long-pressed at that position.
+    private func violatesExactTokens(_ reading: String) -> Bool {
+        guard !exactTokens.isEmpty else { return false }
+        // One symbol per T9 digit — the same filter SyllableCodec uses to build `t9`.
+        let symbols = Array(reading.filter { T9KeyMap.tokenToKey[$0] != nil })
+        return exactTokens.contains { $0.key < symbols.count && symbols[$0.key] != $0.value }
     }
 
     /// Matches each typed tone to the syllable it was pressed for, by comparing the digit
