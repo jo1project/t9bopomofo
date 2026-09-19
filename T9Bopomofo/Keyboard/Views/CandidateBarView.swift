@@ -14,6 +14,8 @@ final class CandidateBarView: UIView {
     private let expandButton = UIButton(type: .system)
     private let dismissButton = UIButton(type: .system)
     private var preeditMaxWidth: NSLayoutConstraint?
+    /// Pills already in `stack`, reused across keystrokes; the ones past the current count are hidden.
+    private var pillPool: [UIButton] = []
     private(set) var isExpanded = false
 
     override init(frame: CGRect) {
@@ -150,22 +152,34 @@ final class CandidateBarView: UIView {
 
         expandButton.isEnabled = !items.isEmpty || !preedit.isEmpty
         expandButton.alpha = expandButton.isEnabled ? 1 : 0.35
-        stack.arrangedSubviews.forEach {
-            stack.removeArrangedSubview($0)
-            $0.removeFromSuperview()
-        }
         for (idx, c) in items.enumerated() {
-            let btn = CandidateBarView.makePillButton(c, isTop: idx == 0, traits: traitCollection)
-            btn.addTarget(self, action: #selector(tap(_:)), for: .touchUpInside)
-            stack.addArrangedSubview(btn)
+            let btn: UIButton
+            if idx < pillPool.count {
+                btn = pillPool[idx]
+            } else {
+                btn = PillButton(type: .system)
+                btn.addTarget(self, action: #selector(tap(_:)), for: .touchUpInside)
+                pillPool.append(btn)
+                stack.addArrangedSubview(btn)
+            }
+            CandidateBarView.configurePill(btn, c, isTop: idx == 0, traits: traitCollection)
+            if btn.isHidden { btn.isHidden = false }
             objc_setAssociatedObject(btn, &Assoc.candidate, c, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
         }
+        for btn in pillPool.dropFirst(items.count) where !btn.isHidden { btn.isHidden = true }
     }
 
     /// Shared pill styling for both the scrolling bar and the expanded grid panel.
     static func makePillButton(_ c: Candidate, isTop: Bool, traits: UITraitCollection) -> UIButton {
+        let btn = PillButton(type: .system)
+        configurePill(btn, c, isTop: isTop, traits: traits)
+        return btn
+    }
+
+    /// Sets everything that varies per candidate (both branches assign every property), so a
+    /// pooled button can be re-pointed at a different candidate without leaving stale styling.
+    static func configurePill(_ btn: UIButton, _ c: Candidate, isTop: Bool, traits: UITraitCollection) {
         let dark = traits.userInterfaceStyle == .dark
-        let btn = UIButton(type: .system)
         if c.source == .llm {
             btn.setTitle("✦ \(c.text)", for: .normal)
             btn.titleLabel?.font = .systemFont(ofSize: 18, weight: .semibold)
@@ -187,13 +201,21 @@ final class CandidateBarView: UIView {
         btn.contentEdgeInsets = UIEdgeInsets(top: 7, left: 14, bottom: 7, right: 14)
         btn.layer.cornerRadius = 16 // pill: fully rounded against the ~32pt tall button
         KeyboardChrome.applyKeyShadow(btn.layer)
-        return btn
     }
 
     @objc private func tap(_ sender: UIButton) {
         if let c = objc_getAssociatedObject(sender, &Assoc.candidate) as? Candidate {
             onSelect?(c)
         }
+    }
+}
+
+/// A shadowed layer with no `shadowPath` makes Core Animation render every button offscreen to
+/// work out the shadow's outline. The path is just the rounded rect, so set it explicitly.
+private final class PillButton: UIButton {
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        layer.shadowPath = UIBezierPath(roundedRect: bounds, cornerRadius: layer.cornerRadius).cgPath
     }
 }
 

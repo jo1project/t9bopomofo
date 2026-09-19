@@ -7,7 +7,7 @@ enum SyllableCodec {
     struct EncodedSyllable {
         /// T9 keys for this syllable, e.g. ㄗㄠ → "38".
         let digits: String
-        /// Tone key: q/w/x/y (1/2/3/4). Neutral tone (˙) / no tone info → nil.
+        /// Tone key: q/w/x/y (1/2/3/4), or ˙ for neutral (輕聲). No tone info → nil.
         let tone: Character?
     }
 
@@ -24,7 +24,10 @@ enum SyllableCodec {
                 tone = mapped
                 chars.removeLast()
             } else if last == "˙" {
-                chars.removeLast() // neutral tone: no anchor, same as tone5
+                chars.removeLast()
+                // Its own tone, so the ˙ key can anchor it. It used to leave `tone` nil and fall
+                // into the tone-1 default below, so 的/嗎/吧 scored as first tone.
+                tone = "˙"
             }
         }
 
@@ -42,15 +45,15 @@ enum SyllableCodec {
         return EncodedSyllable(digits: digits, tone: tone)
     }
 
-    static func encodeReading(_ reading: String) -> (digits: String, tones: String, syllableLengths: [Int]) {
+    static func encodeReading(_ reading: String) -> (digits: String, tones: String, syllableLengths: String) {
         var digits = ""
         var tones = ""
-        var syllableLengths: [Int] = []
+        var syllableLengths = ""  // one digit char per syllable; a zhuyin syllable is at most 4 keys
         for part in reading.split(separator: " ") {
             guard let enc = encodeSyllable(String(part)) else { continue }
             digits += enc.digits
             tones.append(enc.tone ?? "-")
-            syllableLengths.append(enc.digits.count)
+            syllableLengths += String(enc.digits.count)
         }
         return (digits, tones, syllableLengths)
     }

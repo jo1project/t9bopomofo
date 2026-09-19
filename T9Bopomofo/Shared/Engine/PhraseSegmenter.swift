@@ -10,7 +10,7 @@ enum PhraseSegmenter {
         var text: String { entries.map(\.word).joined() }
         var reading: String { entries.map(\.reading).joined(separator: " ") }
         var tones: String { entries.map(\.tones).joined() }
-        var syllableLengths: [Int] { entries.flatMap(\.syllableLengths) }
+        var syllableLengths: String { entries.map(\.syllableLengths).joined() }
 
         static let empty = Path(entries: [], weight: 0)
 
@@ -30,7 +30,6 @@ enum PhraseSegmenter {
 
     static func bestPhrase(digits: String, lexicon: DictionaryLoader) -> LexiconEntry? {
         lexicon.exact(digits: digits).first
-            ?? lexicon.candidates(forDigits: digits, limit: 20).first { $0.t9 == digits }
     }
 
     /// Beam search for alternative segmentations (e.g. 不是+不行 vs 不是+不幸).
