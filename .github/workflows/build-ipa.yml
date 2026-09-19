@@ -42,28 +42,6 @@ jobs:
           xcodebuild -version
           xcrun --sdk iphoneos --show-sdk-version
 
-      - name: TEMP bench per-keystroke cost, baseline vs fix (remove before merging)
-        run: |
-          set -euo pipefail
-          FILES="T9Bopomofo/Shared/Models/LexiconEntry.swift
-          T9Bopomofo/Shared/Engine/T9KeyMap.swift
-          T9Bopomofo/Shared/Engine/SyllableCodec.swift
-          T9Bopomofo/Shared/Engine/DictionaryLoader.swift
-          T9Bopomofo/Shared/Engine/PhraseSegmenter.swift
-          T9Bopomofo/Shared/Engine/FuzzyMatcher.swift"
-          git fetch --depth=1 origin main
-          : > "$RUNNER_TEMP/bench_base.swift"
-          : > "$RUNNER_TEMP/bench_fix.swift"
-          for f in $FILES; do
-            git show "FETCH_HEAD:$f" >> "$RUNNER_TEMP/bench_base.swift"
-            cat "$f" >> "$RUNNER_TEMP/bench_fix.swift"
-          done
-          cat Scripts/bench_keystroke_main.swift | tee -a "$RUNNER_TEMP/bench_base.swift" >> "$RUNNER_TEMP/bench_fix.swift"
-          for v in base fix; do
-            swiftc -O "$RUNNER_TEMP/bench_$v.swift" -o "$RUNNER_TEMP/bench_$v"
-            "$RUNNER_TEMP/bench_$v" $v Resources/chewing/chewing_base.dict.yaml Resources/chewing/taiwan_phrases.dict.yaml
-          done
-
       - name: Install XcodeGen
         run: brew install xcodegen
 
