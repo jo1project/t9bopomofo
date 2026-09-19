@@ -31,7 +31,8 @@ final class DictionaryLoader: @unchecked Sendable {
                 best[key] = e
             }
         }
-        entries = Array(best.values)
+        // Weight-descending order = every index bucket is already sorted by weight (see exact()).
+        entries = best.values.sorted { $0.weight > $1.weight }
         rebuildIndex()
     }
 
@@ -89,8 +90,11 @@ final class DictionaryLoader: @unchecked Sendable {
               let shard = try? PropertyListDecoder().decode([LexiconEntry].self, from: data)
         else { return }
         let base = entries.count
-        entries.append(contentsOf: shard)
-        for (offset, e) in shard.enumerated() {
+        // A T9 string never spans shards, so sorting each shard by weight keeps every
+        // exactIndex bucket weight-descending without sorting per query.
+        let ordered = shard.sorted { $0.weight > $1.weight }
+        entries.append(contentsOf: ordered)
+        for (offset, e) in ordered.enumerated() {
             indexEntry(e, at: base + offset)
         }
     }
@@ -141,7 +145,7 @@ final class DictionaryLoader: @unchecked Sendable {
         guard let first = digits.first else { return [] }
         ensureShardLoaded(first)
         guard let idxs = exactIndex[digits] else { return [] }
-        return idxs.map { entries[$0] }.sorted { $0.weight > $1.weight }
+        return idxs.map { entries[$0] }  // buckets are built weight-descending
     }
 
     // MARK: - Parse

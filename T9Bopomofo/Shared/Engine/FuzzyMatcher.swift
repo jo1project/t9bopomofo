@@ -19,19 +19,18 @@ enum FuzzyMatcher {
         var matches: [Match] = []
         let exactSet = Set(lexicon.exact(digits: digits).map(\.t9))
 
+        // The first digit is never mutated (positions start at 1 here and in insertionProbes):
+        // DictionaryLoader shards by first digit and decodes a shard on first touch, so probing
+        // other first digits would force-decode the whole lexicon on the main thread.
         // 1) Neighbor substitution at one position
         if maxDistance >= 1 {
-            for (i, ch) in digits.enumerated() {
+            for (i, ch) in digits.enumerated() where i > 0 {
                 guard let neigh = T9KeyMap.neighbors[ch] else { continue }
                 for n in neigh {
                     var mutated = Array(digits)
                     mutated[i] = n
                     let cand = String(mutated)
                     for e in lexicon.exact(digits: cand) where !exactSet.contains(e.t9) {
-                        matches.append(Match(entry: e, distance: 1, kind: .fuzzyNeighbor))
-                    }
-                    // Also prefix-complete: entries whose t9 == cand or longer with same length preference
-                    for e in lexicon.candidates(forDigits: cand, limit: 8) where e.t9.count == cand.count {
                         matches.append(Match(entry: e, distance: 1, kind: .fuzzyNeighbor))
                     }
                 }
@@ -71,12 +70,12 @@ enum FuzzyMatcher {
             .map { $0 }
     }
 
-    /// All strings formed by inserting one T9 key into `digits`.
+    /// All strings formed by inserting one T9 key into `digits`, after the first digit.
     private static func insertionProbes(_ digits: String) -> [String] {
         let keys: [Character] = Array("0123456789v")
         var out: [String] = []
         let chars = Array(digits)
-        for i in 0...chars.count {
+        for i in 1...chars.count {
             for k in keys {
                 var c = chars
                 c.insert(k, at: i)

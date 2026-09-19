@@ -4,11 +4,24 @@ import Foundation
 enum PhraseSegmenter {
     struct Path {
         let entries: [LexiconEntry]
+        /// Min entry weight, kept incrementally: sort comparators read this thousands of times
+        /// per keystroke, so it must not rebuild an array on every access.
+        let weight: Int
         var text: String { entries.map(\.word).joined() }
         var reading: String { entries.map(\.reading).joined(separator: " ") }
-        var weight: Int { entries.map(\.weight).min() ?? 0 }
         var tones: String { entries.map(\.tones).joined() }
         var syllableLengths: [Int] { entries.flatMap(\.syllableLengths) }
+
+        static let empty = Path(entries: [], weight: 0)
+
+        private init(entries: [LexiconEntry], weight: Int) {
+            self.entries = entries
+            self.weight = weight
+        }
+
+        func appending(_ e: LexiconEntry) -> Path {
+            Path(entries: entries + [e], weight: entries.isEmpty ? e.weight : min(weight, e.weight))
+        }
     }
 
     static func greedy(digits: String, lexicon: DictionaryLoader, maxWordKeys: Int = 12) -> [LexiconEntry] {
@@ -31,7 +44,7 @@ enum PhraseSegmenter {
 
         // dp[i] = best paths covering digits[0..<i]
         var dp: [[Path]] = Array(repeating: [], count: digits.count + 1)
-        dp[0] = [Path(entries: [])]
+        dp[0] = [Path.empty]
 
         for i in 0..<digits.count {
             guard !dp[i].isEmpty else { continue }
@@ -65,10 +78,7 @@ enum PhraseSegmenter {
                 for hit in options {
                     let nextIndex = i + hit.t9.count
                     guard nextIndex <= digits.count else { continue }
-                    var entries = prev.entries
-                    entries.append(hit)
-                    let path = Path(entries: entries)
-                    dp[nextIndex].append(path)
+                    dp[nextIndex].append(prev.appending(hit))
                 }
             }
             // Cap beam at each position
