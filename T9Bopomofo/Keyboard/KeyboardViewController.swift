@@ -73,6 +73,8 @@ final class KeyboardViewController: UIInputViewController {
         candidateBar.onDismissKeyboard = { [weak self] in
             self?.dismissKeyboard()
         }
+        // Tap = next keyboard, long-press = keyboard list (system-provided behavior).
+        candidateBar.globeButton.addTarget(self, action: #selector(handleInputModeList(from:with:)), for: .allTouchEvents)
 
         engine.onCandidatesChanged = { [weak self] in
             self?.reloadCandidates()
@@ -92,6 +94,11 @@ final class KeyboardViewController: UIInputViewController {
         reloadCandidates()
 
         engine.prepare(bundle: Bundle(for: KeyboardViewController.self))
+    }
+
+    override func viewWillLayoutSubviews() {
+        super.viewWillLayoutSubviews()
+        candidateBar.globeButton.isHidden = !needsInputModeSwitchKey
     }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {

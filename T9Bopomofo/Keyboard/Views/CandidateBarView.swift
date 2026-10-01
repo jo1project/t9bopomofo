@@ -13,6 +13,9 @@ final class CandidateBarView: UIView {
     private let divider = UIView()
     private let expandButton = UIButton(type: .system)
     private let dismissButton = UIButton(type: .system)
+    /// Next-keyboard key. KeyboardViewController wires it to handleInputModeList and shows it
+    /// only when needsInputModeSwitchKey (Home-button iPhones get no system globe; App Review 4.4.1).
+    let globeButton = UIButton(type: .system)
     private var preeditMaxWidth: NSLayoutConstraint?
     /// Pills already in `stack`, reused across keystrokes; the ones past the current count are hidden.
     private var pillPool: [UIButton] = []
@@ -49,6 +52,16 @@ final class CandidateBarView: UIView {
             self?.onDismissKeyboard?()
         }, for: .touchUpInside)
 
+        globeButton.setImage(UIImage(systemName: "globe"), for: .normal)
+        globeButton.accessibilityLabel = "下一個鍵盤"
+        globeButton.isHidden = true
+
+        // Hidden buttons collapse out of the stack, so the candidates get their space back.
+        let trailingButtons = UIStackView(arrangedSubviews: [globeButton, expandButton, dismissButton])
+        trailingButtons.axis = .horizontal
+        trailingButtons.spacing = 2
+        trailingButtons.translatesAutoresizingMaskIntoConstraints = false
+
         scroll.translatesAutoresizingMaskIntoConstraints = false
         scroll.showsHorizontalScrollIndicator = false
         stack.axis = .horizontal
@@ -59,8 +72,7 @@ final class CandidateBarView: UIView {
         addSubview(preeditContainer)
         addSubview(divider)
         addSubview(scroll)
-        addSubview(expandButton)
-        addSubview(dismissButton)
+        addSubview(trailingButtons)
 
         let maxW = preeditContainer.widthAnchor.constraint(lessThanOrEqualToConstant: 88)
         preeditMaxWidth = maxW
@@ -81,18 +93,15 @@ final class CandidateBarView: UIView {
             divider.widthAnchor.constraint(equalToConstant: 1),
             divider.heightAnchor.constraint(equalToConstant: 22),
 
-            dismissButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -2),
-            dismissButton.centerYAnchor.constraint(equalTo: centerYAnchor),
-            dismissButton.widthAnchor.constraint(equalToConstant: 34),
-            dismissButton.heightAnchor.constraint(equalToConstant: 36),
-
-            expandButton.trailingAnchor.constraint(equalTo: dismissButton.leadingAnchor, constant: -2),
-            expandButton.centerYAnchor.constraint(equalTo: centerYAnchor),
+            trailingButtons.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -2),
+            trailingButtons.centerYAnchor.constraint(equalTo: centerYAnchor),
+            globeButton.widthAnchor.constraint(equalToConstant: 34),
             expandButton.widthAnchor.constraint(equalToConstant: 34),
-            expandButton.heightAnchor.constraint(equalToConstant: 36),
+            dismissButton.widthAnchor.constraint(equalToConstant: 34),
+            trailingButtons.heightAnchor.constraint(equalToConstant: 36),
 
             scroll.leadingAnchor.constraint(equalTo: divider.trailingAnchor, constant: 6),
-            scroll.trailingAnchor.constraint(equalTo: expandButton.leadingAnchor, constant: -2),
+            scroll.trailingAnchor.constraint(equalTo: trailingButtons.leadingAnchor, constant: -2),
             scroll.topAnchor.constraint(equalTo: topAnchor),
             scroll.bottomAnchor.constraint(equalTo: bottomAnchor),
 
@@ -124,6 +133,7 @@ final class CandidateBarView: UIView {
         let buttonTint: UIColor = dark ? .white : .darkGray
         expandButton.setTitleColor(buttonTint, for: .normal)
         dismissButton.setTitleColor(buttonTint, for: .normal)
+        globeButton.tintColor = buttonTint
     }
 
     func setExpanded(_ expanded: Bool) {

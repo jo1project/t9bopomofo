@@ -123,6 +123,6 @@ The app collects no data, has no accounts, ads, analytics or in-app purchases.
 
 ## 送審前檢查
 
-- [ ] **地球鍵（審核準則 4.4.1）：** 鍵盤目前沒有處理 `needsInputModeSwitchKey`。有 Home 鍵的 iPhone（SE 2/3）系統不會顯示地球鍵，鍵盤必須自己提供切換鍵盤的方法，否則很可能被退件。
+- [x] **地球鍵（審核準則 4.4.1）：** 有 Home 鍵的 iPhone（SE 2/3）系統不顯示地球鍵，候選列右側會出現 🌐（點一下換下一個鍵盤、長按選鍵盤）。
 - [ ] 分支 merge 進 main 後，隱私權政策網址才會生效（網址指向 main）。
-- [ ] 版本號目前是 0.3.9（寫在 `.github/workflows/testflight.yml`）；要用 1.0.0 上架需改 workflow 與 `project.yml`。
+- [x] 版本號 1.0.0（`project.yml`、兩個 `Info.plist`、`testflight.yml`、`codemagic.yaml` 都要一起改）。
