@@ -476,6 +476,64 @@ def test_chi_reachable_with_tone():
     print("chi_reachable_with_tone OK", chi_score)
 
 
+def n_best(digits, entries, tone_marks, limit=8, beam=24):
+    """Mirrors PhraseSegmenter.nBest with InputEngine's tone bonus: prune before extending,
+    rank by (fewer segments, min weight + tone bonus), score tones before the per-span cut."""
+    by_t9: dict[str, list] = {}
+    for e in sorted(entries, key=lambda e: -e[3]):
+        by_t9.setdefault(e[2], []).append(e)
+
+    def seg_bonus(reading, offset):
+        parts = [encode_syllable(s) for s in reading.split(" ") if s]
+        boundary, at = offset, {}
+        for d, t in parts:
+            boundary += len(d)
+            at[boundary] = t or "-"
+        bonus = 0.0
+        for d, t in tone_marks:
+            if not offset < d <= boundary:
+                continue
+            if d not in at:
+                bonus -= 500
+            elif at[d] != "-":
+                bonus += 12_000 if at[d] == t else -18_000
+        return bonus
+
+    def rank(p):
+        return (len(p[0]), -(p[1] + p[2]))
+
+    dp = [[] for _ in range(len(digits) + 1)]
+    dp[0] = [((), 0, 0.0)]  # (words, min weight, bonus sum)
+    for i in range(len(digits)):
+        if not dp[i]:
+            continue
+        dp[i] = sorted(dp[i], key=rank)[:beam]
+        hits = []
+        for n in range(1, min(12, len(digits) - i) + 1):
+            scored = [(e, seg_bonus(e[1], i)) for e in by_t9.get(digits[i:i + n], [])[:120]]
+            hits += sorted(scored, key=lambda x: -(x[0][3] + x[1]))[:16]
+        for words, w, b in dp[i]:
+            for e, eb in hits:
+                dp[i + len(e[2])].append((words + (e[0],), e[3] if not words else min(w, e[3]), b + eb))
+    out = []
+    for words, _, _ in sorted(dp[-1], key=rank):
+        text = "".join(words)
+        if text not in out:
+            out.append(text)
+    return out[:limit]
+
+
+def test_xiang_yixia_long_input():
+    """想一下 is not a dictionary word: 想 + 一下 must survive the beam on 7 keys, once the
+    tones are typed. The old raw-min-weight beam pruned 想 and only produced chops."""
+    digits = encode_reading("ㄒㄧㄤˇ ㄧ ㄒㄧㄚˋ")
+    assert digits == "8696861"
+    marks = [(3, "x"), (4, "q"), (7, "y")]
+    paths = n_best(digits, load_all(), marks)
+    assert paths[0] == "想一下", paths
+    print("xiang_yixia_long_input OK", paths[:3])
+
+
 def main() -> int:
     test_encode_samples()
     test_dict_contains_targets()
@@ -489,6 +547,7 @@ def main() -> int:
     test_jietu_tone_position_alignment()
     test_fullcoverage_survives_tone_press()
     test_chi_reachable_with_tone()
+    test_xiang_yixia_long_input()
     print("ALL PASSED")
     return 0
 

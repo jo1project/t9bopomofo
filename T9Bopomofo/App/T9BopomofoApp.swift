@@ -1,6 +1,5 @@
 import SwiftUI
 import UniformTypeIdentifiers
-import StoreKit
 
 @main
 struct T9BopomofoApp: App {
@@ -18,8 +17,6 @@ struct RootView: View {
                 .tabItem { Label("啟用", systemImage: "keyboard") }
             KeyboardSettingsView()
                 .tabItem { Label("設定", systemImage: "gearshape") }
-            SponsorView()
-                .tabItem { Label("贊助", systemImage: "heart.fill") }
             BackupView()
                 .tabItem { Label("備份", systemImage: "externaldrive") }
             LLMSettingsView()
@@ -49,8 +46,8 @@ struct SetupView: View {
                         Text("功能摘要").font(.headline)
                         Text("• 選詞：libchewing 詞庫 + 自學排序；候選 ▼ 可展開")
                         Text("• 長按注音／標點：在原地左右滑即可切換選項")
-                        Text("• 臨近鍵容錯：預設開啟；贊助後可於「設定」關閉")
-                        Text("• LLM 聯想：單次贊助解鎖後，於 LLM 分頁設定")
+                        Text("• 臨近鍵容錯：預設開啟；可於「設定」關閉")
+                        Text("• LLM 聯想：自備 API Key，於 LLM 分頁設定")
                         Text("• 。點＝句號／長按標點；123 長按表情；空格/EN")
                         Text("• 英文：⇧ 點一下大寫下一個、再點 ⇪ 鎖定")
                     }
@@ -78,27 +75,18 @@ struct KeyboardSettingsView: View {
     @State private var fuzzyOn = AppSettings.shared.fuzzyNeighborEnabled
     @State private var hapticsOn = AppSettings.shared.hapticsEnabled
     @State private var soundsOn = AppSettings.shared.soundsEnabled
-    @State private var sponsored = AppSettings.shared.isSponsored
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
                     Toggle("臨近鍵容錯", isOn: $fuzzyOn)
-                        .disabled(!sponsored)
                         .onChange(of: fuzzyOn) { _, v in
                             AppSettings.shared.fuzzyNeighborEnabled = v
-                            fuzzyOn = AppSettings.shared.fuzzyNeighborEnabled
                         }
-                    if sponsored {
-                        Text("關閉後只保留精確匹配。預設開啟。")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Text("預設開啟。贊助後可關閉此功能。")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
+                    Text("關閉後只保留精確匹配。預設開啟。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 } header: {
                     Text("輸入")
                 }
@@ -123,108 +111,10 @@ struct KeyboardSettingsView: View {
             .navigationTitle("鍵盤設定")
             .onAppear {
                 AppSettings.shared.reloadFromDisk()
-                sponsored = AppSettings.shared.isSponsored
                 fuzzyOn = AppSettings.shared.fuzzyNeighborEnabled
                 hapticsOn = AppSettings.shared.hapticsEnabled
                 soundsOn = AppSettings.shared.soundsEnabled
             }
-        }
-    }
-}
-
-// MARK: - Sponsor (one-time)
-
-struct SponsorView: View {
-    @ObservedObject private var store = SponsorStore.shared
-    private var appGroupOK: Bool { AppSettings.shared.appGroupAvailable }
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                if !appGroupOK {
-                    Section {
-                        Label("App Group 不可用", systemImage: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.orange)
-                        Text("目前這包多半是 unsigned／簽名不完整，主 App 的「測試解鎖」寫不進鍵盤共用空間，所以鍵盤會一直說要贊助。刪除重裝同一包通常無效。請用 Xcode + 你的開發者帳號正式簽名安裝（並在開發者後台為 App／鍵盤開啟 App Group：group.com.jo1project.t9bopomofo）。")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                Section {
-                    if store.isSponsored {
-                        Label("已解鎖贊助內容", systemImage: "checkmark.seal.fill")
-                            .foregroundStyle(.green)
-                        Text(appGroupOK
-                             ? "感謝支持。你可以使用 LLM，並可在設定中關閉臨近鍵容錯。"
-                             : "主 App 已標記解鎖，但鍵盤可能仍讀不到（見上方 App Group 警告）。")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Text("這是一次買斷的純贊助解鎖，不是訂閱。")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                        Text("解鎖後可使用 LLM 聯想，並可自行關閉臨近鍵容錯（預設仍開啟）。鍵盤本體功能維持可用。")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                Section("單次贊助") {
-                    if let product = store.product {
-                        Button {
-                            Task { await store.purchase() }
-                        } label: {
-                            HStack {
-                                Text("贊助解鎖")
-                                Spacer()
-                                Text(product.displayPrice)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        .disabled(store.isSponsored || store.isLoading)
-                    } else {
-                        Text("商品載入中或尚未在 App Store Connect 建立。")
-                            .foregroundStyle(.secondary)
-                        Text("產品 ID：\(SponsorProduct.unlockID)")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Button("還原購買") {
-                        Task { await store.restore() }
-                    }
-                    .disabled(store.isLoading)
-
-                    Button("重新載入商品") {
-                        Task { await store.refresh() }
-                    }
-                    .disabled(store.isLoading)
-                }
-
-                if !store.statusMessage.isEmpty {
-                    Section("狀態") { Text(store.statusMessage) }
-                }
-
-                // Unsigned / pre-ASC builds cannot complete StoreKit purchase.
-                // Keep a manual unlock so LLM can be tested before the first IAP ships.
-                Section {
-                    Button("測試解鎖（開啟 LLM）") {
-                        store.unlockForTesting()
-                    }
-                    .disabled(store.isSponsored)
-                    Button("清除測試解鎖", role: .destructive) {
-                        store.clearTestingUnlock()
-                    }
-                    Text("內購正式上架並可購買後，可改走上方「贊助解鎖」。此按鈕僅方便目前測 LLM／截圖。")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                } header: {
-                    Text("上架前測試")
-                }
-            }
-            .navigationTitle("贊助")
-            .task { await store.refresh() }
         }
     }
 }
@@ -327,10 +217,9 @@ struct BackupDocument: FileDocument {
     }
 }
 
-// MARK: - LLM (sponsor-gated)
+// MARK: - LLM (bring your own key)
 
 struct LLMSettingsView: View {
-    @ObservedObject private var store = SponsorStore.shared
     @State private var enabled = AppSettings.shared.llmEnabled
     @State private var provider = LLMProviderPreset.matching(baseURL: AppSettings.shared.llmBaseURL)
     @State private var baseURL = AppSettings.shared.llmBaseURL
@@ -342,24 +231,9 @@ struct LLMSettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                if !store.isSponsored {
-                    Section {
-                        Text("LLM 聯想需先單次贊助解鎖。")
-                            .foregroundStyle(.secondary)
-                        NavigationLink("前往贊助") {
-                            SponsorView()
-                        }
-                    }
-                }
-
                 Section {
                     Toggle("啟用 LLM 聯想", isOn: $enabled)
-                        .disabled(!store.isSponsored)
                         .onChange(of: enabled) { _, v in
-                            guard store.isSponsored else {
-                                enabled = false
-                                return
-                            }
                             AppSettings.shared.llmEnabled = v
                             diagnostics = AppSettings.shared.llmDiagnostics
                         }
@@ -367,7 +241,6 @@ struct LLMSettingsView: View {
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
-                .opacity(store.isSponsored ? 1 : 0.45)
 
                 Group {
                     Section("服務商") {
@@ -436,20 +309,17 @@ struct LLMSettingsView: View {
                         }
                     }
                 }
-                .disabled(!store.isSponsored)
-                .opacity(store.isSponsored ? 1 : 0.45)
             }
             .navigationTitle("LLM 預測")
             .onAppear {
                 reloadLocal()
             }
-            .task { await store.refresh() }
         }
     }
 
     private func reloadLocal() {
         AppSettings.shared.reloadFromDisk()
-        enabled = AppSettings.shared.llmEnabled && store.isSponsored
+        enabled = AppSettings.shared.llmEnabled
         baseURL = AppSettings.shared.llmBaseURL
         apiKey = AppSettings.shared.llmAPIKey
         model = AppSettings.shared.llmModel

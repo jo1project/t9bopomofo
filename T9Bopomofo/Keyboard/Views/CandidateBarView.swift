@@ -13,6 +13,9 @@ final class CandidateBarView: UIView {
     private let divider = UIView()
     private let expandButton = UIButton(type: .system)
     private let dismissButton = UIButton(type: .system)
+    /// Next-keyboard key. KeyboardViewController wires it to handleInputModeList and shows it
+    /// only when needsInputModeSwitchKey (Home-button iPhones get no system globe; App Review 4.4.1).
+    let globeButton = UIButton(type: .system)
     private var preeditMaxWidth: NSLayoutConstraint?
     /// Pills already in `stack`, reused across keystrokes; the ones past the current count are hidden.
     private var pillPool: [UIButton] = []
@@ -22,7 +25,7 @@ final class CandidateBarView: UIView {
         super.init(frame: frame)
         preeditLabel.font = .systemFont(ofSize: 12, weight: .medium)
         preeditLabel.translatesAutoresizingMaskIntoConstraints = false
-        preeditLabel.lineBreakMode = .byTruncatingTail
+        preeditLabel.lineBreakMode = .byTruncatingHead  // long input: keep the newest keys visible
         preeditLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         preeditLabel.textAlignment = .center
 
@@ -49,6 +52,16 @@ final class CandidateBarView: UIView {
             self?.onDismissKeyboard?()
         }, for: .touchUpInside)
 
+        globeButton.setImage(UIImage(systemName: "globe"), for: .normal)
+        globeButton.accessibilityLabel = "下一個鍵盤"
+        globeButton.isHidden = true
+
+        // Hidden buttons collapse out of the stack, so the candidates get their space back.
+        let trailingButtons = UIStackView(arrangedSubviews: [globeButton, expandButton, dismissButton])
+        trailingButtons.axis = .horizontal
+        trailingButtons.spacing = 2
+        trailingButtons.translatesAutoresizingMaskIntoConstraints = false
+
         scroll.translatesAutoresizingMaskIntoConstraints = false
         scroll.showsHorizontalScrollIndicator = false
         stack.axis = .horizontal
@@ -59,8 +72,7 @@ final class CandidateBarView: UIView {
         addSubview(preeditContainer)
         addSubview(divider)
         addSubview(scroll)
-        addSubview(expandButton)
-        addSubview(dismissButton)
+        addSubview(trailingButtons)
 
         let maxW = preeditContainer.widthAnchor.constraint(lessThanOrEqualToConstant: 88)
         preeditMaxWidth = maxW
@@ -81,18 +93,15 @@ final class CandidateBarView: UIView {
             divider.widthAnchor.constraint(equalToConstant: 1),
             divider.heightAnchor.constraint(equalToConstant: 22),
 
-            dismissButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -2),
-            dismissButton.centerYAnchor.constraint(equalTo: centerYAnchor),
-            dismissButton.widthAnchor.constraint(equalToConstant: 34),
-            dismissButton.heightAnchor.constraint(equalToConstant: 36),
-
-            expandButton.trailingAnchor.constraint(equalTo: dismissButton.leadingAnchor, constant: -2),
-            expandButton.centerYAnchor.constraint(equalTo: centerYAnchor),
+            trailingButtons.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -2),
+            trailingButtons.centerYAnchor.constraint(equalTo: centerYAnchor),
+            globeButton.widthAnchor.constraint(equalToConstant: 34),
             expandButton.widthAnchor.constraint(equalToConstant: 34),
-            expandButton.heightAnchor.constraint(equalToConstant: 36),
+            dismissButton.widthAnchor.constraint(equalToConstant: 34),
+            trailingButtons.heightAnchor.constraint(equalToConstant: 36),
 
             scroll.leadingAnchor.constraint(equalTo: divider.trailingAnchor, constant: 6),
-            scroll.trailingAnchor.constraint(equalTo: expandButton.leadingAnchor, constant: -2),
+            scroll.trailingAnchor.constraint(equalTo: trailingButtons.leadingAnchor, constant: -2),
             scroll.topAnchor.constraint(equalTo: topAnchor),
             scroll.bottomAnchor.constraint(equalTo: bottomAnchor),
 
@@ -124,6 +133,7 @@ final class CandidateBarView: UIView {
         let buttonTint: UIColor = dark ? .white : .darkGray
         expandButton.setTitleColor(buttonTint, for: .normal)
         dismissButton.setTitleColor(buttonTint, for: .normal)
+        globeButton.tintColor = buttonTint
     }
 
     func setExpanded(_ expanded: Bool) {
@@ -226,6 +236,9 @@ final class CandidatePanelView: UIView {
 
     private let scroll = UIScrollView()
     private let stack = UIStackView()
+    private var items: [Candidate] = []
+    /// Width the rows were last packed for; -1 forces a repack on the next layout pass.
+    private var packedWidth: CGFloat = -1
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -266,35 +279,60 @@ final class CandidatePanelView: UIView {
     required init?(coder: NSCoder) { fatalError() }
 
     func setCandidates(_ items: [Candidate]) {
-        stack.arrangedSubviews.forEach {
-            stack.removeArrangedSubview($0)
-            $0.removeFromSuperview()
-        }
-        let cols = 6
+        self.items = items
+        packedWidth = -1
+        setNeedsLayout()
+    }
+
+    /// Rows are packed by each pill's natural width, so they need the real width; the panel is
+    /// filled right after it is created, before it has one.
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let width = scroll.bounds.width
+        guard width > 0, width != packedWidth else { return }
+        packedWidth = width
+        packRows(width: width)
+    }
+
+    /// Wrapping rows instead of a fixed 6-column grid: equal columns left ~1 character of room,
+    /// so multi-character candidates showed as "…". Single chars keep the old cell width.
+    private func packRows(width: CGFloat) {
+        stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        let spacing: CGFloat = 6
+        let cols: CGFloat = 6
+        let avail = width - spacing  // the trailing spacer (finishRow) takes one gap too
+        let minCell = floor((avail - spacing * (cols - 1)) / cols)
         var row: UIStackView?
+        var used: CGFloat = 0
         for (idx, c) in items.enumerated() {
-            if idx % cols == 0 {
-                row = UIStackView()
-                row?.axis = .horizontal
-                row?.spacing = 6
-                row?.distribution = .fillEqually
-                stack.addArrangedSubview(row!)
-            }
             let btn = CandidateBarView.makePillButton(c, isTop: idx == 0, traits: traitCollection)
             btn.layer.cornerRadius = 8 // grid cells stay rounded rects, not pills
-            btn.heightAnchor.constraint(equalToConstant: 44).isActive = true
             btn.addAction(UIAction { [weak self] _ in self?.onSelect?(c) }, for: .touchUpInside)
-            row?.addArrangedSubview(btn)
-        }
-        // pad last row
-        if let row {
-            let count = row.arrangedSubviews.count
-            if count < cols {
-                for _ in count..<cols {
-                    row.addArrangedSubview(UIView())
-                }
+            let w = min(avail, max(minCell, ceil(btn.intrinsicContentSize.width)))
+            if row == nil || used + spacing + w > avail {
+                if let row { Self.finishRow(row) }
+                let r = UIStackView()
+                r.axis = .horizontal
+                r.spacing = spacing
+                stack.addArrangedSubview(r)
+                row = r
+                used = -spacing
             }
+            NSLayoutConstraint.activate([
+                btn.heightAnchor.constraint(equalToConstant: 44),
+                btn.widthAnchor.constraint(equalToConstant: w),
+            ])
+            row?.addArrangedSubview(btn)
+            used += spacing + w
         }
+        if let row { Self.finishRow(row) }
+    }
+
+    /// Trailing spacer soaks up the leftover width so pills keep their own size.
+    private static func finishRow(_ row: UIStackView) {
+        let spacer = UIView()
+        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        row.addArrangedSubview(spacer)
     }
 }
 private enum Assoc {

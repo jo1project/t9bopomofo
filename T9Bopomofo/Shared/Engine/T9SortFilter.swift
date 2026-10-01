@@ -38,9 +38,17 @@ enum T9SortFilter {
         var orphans: [Item] = []
         var maxCov = 0
 
-        for var item in items.prefix(80) {
+        var partials = 0
+        for var item in items {
             let cov = item.coverage
             item.fullCoverage = cov == digitsCount
+            // Only the top 80 partial spans are ranked; full-coverage items are never cut. They
+            // used to be: on long input a segmented phrase (想一下) scores below common single
+            // chars, fell outside the top 80, and only partial spans (想要, 享有) were shown.
+            if !item.fullCoverage {
+                partials += 1
+                if partials > 80 { continue }
+            }
             if !item.fullCoverage, cov < input.count {
                 let next = input[cov]
                 item.orphanTone = toneKeys.contains(next)

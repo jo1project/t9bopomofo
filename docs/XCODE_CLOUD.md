@@ -1,6 +1,6 @@
 # Xcode Cloud / TestFlight（無本機 Mac 時）
 
-目標：用 **正式簽名** 安裝，讓 App Group 生效，鍵盤才讀得到 LLM／贊助設定。
+目標：用 **正式簽名** 安裝，讓 App Group 生效，鍵盤才讀得到 LLM 設定。
 
 ## 你先在網頁做的（必做）
 
@@ -60,4 +60,4 @@ Repo 已有 `ci_scripts/ci_post_clone.sh`：Cloud 會自動跑 `xcodegen`。
 
 ## 驗收
 
-TestFlight 版裝好後，App → LLM → 診斷應顯示 **「App Group：可用」**，鍵盤才不會一直要贊助。
+TestFlight 版裝好後，App → LLM → 診斷應顯示 **「App Group：可用」**，鍵盤才讀得到 LLM 設定。

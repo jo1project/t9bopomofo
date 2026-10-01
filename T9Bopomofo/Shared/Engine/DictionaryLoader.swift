@@ -1,9 +1,29 @@
 import Foundation
 
 final class DictionaryLoader: @unchecked Sendable {
-    private(set) var entries: [LexiconEntry] = []
-    /// Full T9 string → entry indices, for O(1) exact() lookups.
-    private var exactIndex: [String: [Int]] = [:]
+    /// One T9 first-digit's entries, weight-descending, plus full T9 string → indices for O(1)
+    /// exact() lookups. Self-contained so a shard decoded off the main thread is merged in with
+    /// a single assignment.
+    private struct Shard {
+        let entries: [LexiconEntry]
+        let index: [String: [Int]]
+
+        init(_ entries: [LexiconEntry]) {
+            // Weight-descending order = every index bucket is already sorted by weight (see exact()).
+            self.entries = entries.sorted { $0.weight > $1.weight }
+            var index: [String: [Int]] = [:]
+            for (i, e) in self.entries.enumerated() {
+                index[e.t9, default: []].append(i)
+            }
+            self.index = index
+        }
+    }
+
+    /// Main thread only; the background preload hands shards back via the main queue.
+    private var shards: [Character: Shard] = [:]
+
+    /// All loaded entries (build scripts read this after the eager `load(from:)`).
+    var entries: [LexiconEntry] { shards.values.flatMap(\.entries) }
 
     /// T9 keys, one shard per first digit — matches Scripts/generate_lexicon_main.swift's
     /// sharding and T9KeyMap's key alphabet.
@@ -11,7 +31,6 @@ final class DictionaryLoader: @unchecked Sendable {
 
     /// Set once a sharded bundle is found; nil means we're in the eager YAML/dev path below.
     private var shardBundle: Bundle?
-    private var loadedShards: Set<Character> = []
 
     func load(from urls: [URL]) throws {
         var all: [LexiconEntry] = []
@@ -29,9 +48,7 @@ final class DictionaryLoader: @unchecked Sendable {
                 best[key] = e
             }
         }
-        // Weight-descending order = every index bucket is already sorted by weight (see exact()).
-        entries = best.values.sorted { $0.weight > $1.weight }
-        rebuildIndex()
+        shards = Dictionary(grouping: best.values) { $0.t9.first ?? " " }.mapValues(Shard.init)
     }
 
     /// Build-time (Scripts/generate_lexicon_main.swift) shards the dictionary into one
@@ -39,12 +56,16 @@ final class DictionaryLoader: @unchecked Sendable {
     /// At runtime we don't decode ANY of them up front — decoding all ~160k entries turned
     /// out to cost 1.5-2s regardless of source format (YAML text or Codable/plist), and that
     /// was the real cause of the "first keystroke takes ~1s" complaint, not rebuildIndex().
-    /// Instead we remember the bundle and lazily decode+merge only the shard(s) a query
-    /// actually touches (see `ensureShardLoaded`), which is ~1/11th the work for a typical
-    /// single-syllable composing session.
+    /// Instead we remember the bundle and decode shards one at a time on a background queue
+    /// (`preloadShards`). A query that reaches a shard before the preload does decodes it
+    /// synchronously (`ensureShardLoaded`), which was the "random" lag: ~150ms on the first
+    /// word starting with each key, again every time iOS relaunched the keyboard.
+    /// ponytail: preloading holds the whole lexicon in memory (normal typing touched most shards
+    /// anyway); if the extension hits its memory limit, preload only the common first keys.
     func loadFromBundle(bundle: Bundle = .main) throws {
         if Self.resourceURL(bundle: bundle, name: "lexicon-0", ext: "bin") != nil {
             shardBundle = bundle
+            preloadShards(bundle: bundle)
             return
         }
 
@@ -78,23 +99,31 @@ final class DictionaryLoader: @unchecked Sendable {
         return nil
     }
 
-    /// Decodes and merges in the one shard `key` belongs to, if it hasn't been already.
+    private static func decodeShard(_ key: Character, bundle: Bundle) -> Shard {
+        guard let url = resourceURL(bundle: bundle, name: "lexicon-\(key)", ext: "bin"),
+              let data = try? Data(contentsOf: url),
+              let entries = try? PropertyListDecoder().decode([LexiconEntry].self, from: data)
+        else { return Shard([]) }  // empty, so a missing shard isn't retried every keystroke
+        return Shard(entries)
+    }
+
+    private func preloadShards(bundle: Bundle) {
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            for key in Self.shardKeys {
+                let shard = Self.decodeShard(key, bundle: bundle)
+                DispatchQueue.main.async {
+                    guard let self, self.shards[key] == nil else { return }
+                    self.shards[key] = shard
+                }
+            }
+        }
+    }
+
+    /// Decodes the shard `key` belongs to now if the background preload hasn't delivered it yet.
     /// No-op in the eager (non-sharded) path, where everything is already loaded.
     private func ensureShardLoaded(_ key: Character) {
-        guard let bundle = shardBundle, !loadedShards.contains(key) else { return }
-        loadedShards.insert(key)
-        guard let url = Self.resourceURL(bundle: bundle, name: "lexicon-\(key)", ext: "bin"),
-              let data = try? Data(contentsOf: url),
-              let shard = try? PropertyListDecoder().decode([LexiconEntry].self, from: data)
-        else { return }
-        let base = entries.count
-        // A T9 string never spans shards, so sorting each shard by weight keeps every
-        // exactIndex bucket weight-descending without sorting per query.
-        let ordered = shard.sorted { $0.weight > $1.weight }
-        entries.append(contentsOf: ordered)
-        for (offset, e) in ordered.enumerated() {
-            indexEntry(e, at: base + offset)
-        }
+        guard let bundle = shardBundle, shards[key] == nil else { return }
+        shards[key] = Self.decodeShard(key, bundle: bundle)
     }
 
     /// All lexicon hits whose T9 exactly equals a prefix of `digits` (Rime partial spans).
@@ -124,8 +153,8 @@ final class DictionaryLoader: @unchecked Sendable {
     func exact(digits: String) -> [LexiconEntry] {
         guard let first = digits.first else { return [] }
         ensureShardLoaded(first)
-        guard let idxs = exactIndex[digits] else { return [] }
-        return idxs.map { entries[$0] }  // buckets are built weight-descending
+        guard let shard = shards[first], let idxs = shard.index[digits] else { return [] }
+        return idxs.map { shard.entries[$0] }  // buckets are built weight-descending
     }
 
     // MARK: - Parse
@@ -173,16 +202,5 @@ final class DictionaryLoader: @unchecked Sendable {
         if let v = Int(t) { return v }
         if let v = Double(t) { return Int(v) }
         return 1000
-    }
-
-    private func rebuildIndex() {
-        exactIndex.removeAll(keepingCapacity: true)
-        for (idx, e) in entries.enumerated() {
-            indexEntry(e, at: idx)
-        }
-    }
-
-    private func indexEntry(_ e: LexiconEntry, at idx: Int) {
-        exactIndex[e.t9, default: []].append(idx)
     }
 }

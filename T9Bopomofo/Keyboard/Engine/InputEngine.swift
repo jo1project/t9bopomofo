@@ -172,10 +172,15 @@ final class InputEngine: ObservableObject {
 
     private func scheduleLLMPredictions(after text: String, hasNetworkAccess: Bool = true) {
         llmTask?.cancel()
-        AppSettings.shared.reloadFromDisk()
-        guard AppSettings.shared.canUseLLM else {
-            let reason = AppSettings.shared.llmBlockedReason
-            predictionStatus = reason.isEmpty ? "LLM未就緒" : reason
+        // No reloadFromDisk() here: it hit the Keychain 2-3x on the main thread on every commit.
+        // The getters already re-read the settings file when its mtime moves.
+        guard AppSettings.shared.llmEnabled else {
+            predictionStatus = ""
+            onCandidatesChanged?()
+            return
+        }
+        guard AppSettings.shared.hasUsableAPIKey else {
+            predictionStatus = "LLM未設定API Key"
             onCandidatesChanged?()
             return
         }
@@ -298,7 +303,12 @@ final class InputEngine: ObservableObject {
             ))
         }
 
-        for (pi, path) in PhraseSegmenter.nBest(digits: digits, lexicon: lexicon, limit: 8).enumerated() {
+        // Tone-aware beam: without it the segmenter pruned the right first word (想 in 想一下)
+        // before the tone keys could rescue it, so long input only showed partial spans.
+        let paths = PhraseSegmenter.nBest(digits: digits, lexicon: lexicon, limit: 8) { e, start in
+            toneScore(tones: e.tones, syllableLengths: e.syllableLengths, offset: start)
+        }
+        for (pi, path) in paths.enumerated() {
             let toneBonus = toneScore(tones: path.tones, syllableLengths: path.syllableLengths)
             let userBoost = userLexicon.boost(for: path.text, previous: lastCommitted.isEmpty ? nil : lastCommitted)
             // Proportional (not flat) penalty: libchewing single-char weights can be ~10x a real
@@ -337,7 +347,7 @@ final class InputEngine: ObservableObject {
             }
         }
 
-        if AppSettings.shared.fuzzyNeighborEffective {
+        if AppSettings.shared.fuzzyNeighborEnabled {
             for m in FuzzyMatcher.fuzzy(digits: digits, lexicon: lexicon, maxDistance: 1, limit: 12)
             where !violatesExactTokens(m.entry.reading) {
                 let toneBonus = toneScore(tones: m.entry.tones, syllableLengths: m.entry.syllableLengths) * 0.5
@@ -376,14 +386,17 @@ final class InputEngine: ObservableObject {
     /// (e.g. tone pressed right after the first syllable, more digits typed after that for
     /// a second, untoned syllable); assuming the last-pressed tone belongs to the last
     /// syllable silently misattributes it whenever the counts don't line up.
-    private func toneScore(tones entryTones: String, syllableLengths: String) -> Double {
+    ///
+    /// `offset`: score one segment of a phrase that starts at this digit; tone presses outside
+    /// the segment are ignored instead of penalized.
+    private func toneScore(tones entryTones: String, syllableLengths: String, offset: Int? = nil) -> Double {
         guard !toneMarks.isEmpty else { return 0 }
         let toneChars = Array(entryTones)
         let lengths = syllableLengths.utf8  // one ASCII digit per syllable
         guard toneChars.count == lengths.count else { return 0 }
 
         var boundaryForDigits: [Int: Character] = [:]
-        var boundary = 0
+        var boundary = offset ?? 0
         for (i, len) in lengths.enumerated() {
             boundary += Int(len) - 48  // ASCII '0'
             boundaryForDigits[boundary] = toneChars[i]
@@ -391,6 +404,7 @@ final class InputEngine: ObservableObject {
 
         var bonus: Double = 0
         for mark in toneMarks {
+            if let offset, mark.digits <= offset || mark.digits > boundary { continue }
             guard let entryTone = boundaryForDigits[mark.digits] else {
                 bonus -= 500 // this candidate doesn't have a syllable break where the tone was pressed
                 continue
