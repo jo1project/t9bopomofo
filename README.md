@@ -17,15 +17,13 @@
 | 佈局 | `zhuyin_phone` |
 | 符號／空格／換行 | 只插入並清空，不送第一候選 |
 | 。鍵 | 彈出常用標點列（原地左右滑選） |
-| 臨近鍵容錯 | 預設開；單次贊助後可關 |
-| LLM | 單次贊助解鎖（產品 ID `com.jo1project.t9bopomofo.sponsor`） |
+| 臨近鍵容錯 | 預設開；可於設定關閉 |
+| LLM | 免費；自備 OpenAI 相容 API Key |
 | 模式 | 注音 ↔ EN ↔ 符號 ↔ Emoji |
 
 ## 簽名
 
 `DEVELOPMENT_TEAM = S24Z424MU4`（Automatic）。在 Xcode 登入同一個 Apple ID 後即可真機安裝。
-
-本機 StoreKit 測試用 `T9Bopomofo/App/Configuration.storekit`。上架前請在 App Store Connect 建立同 ID 的 **Non-Consumable** 商品。
 
 ## IPA
 

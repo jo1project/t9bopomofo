@@ -40,7 +40,6 @@ targets:
       - target: T9Keyboard
         embed: true
         codeSign: false
-      - sdk: StoreKit.framework
       - sdk: Security.framework
 
   T9Keyboard:
@@ -115,7 +114,6 @@ targets:
     dependencies:
       - sdk: CoreFoundation.framework
       - sdk: Security.framework
-      - sdk: StoreKit.framework
       - sdk: UIKit.framework
     info:
       path: T9Bopomofo/Keyboard/Info.plist
@@ -138,6 +136,5 @@ schemes:
         T9Keyboard: all
     run:
       config: Debug
-      storeKitConfiguration: T9Bopomofo/App/Configuration.storekit
     archive:
       config: Release

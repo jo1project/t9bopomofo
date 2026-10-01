@@ -18,7 +18,6 @@ final class AppSettings: @unchecked Sendable {
         static let llmAPIKey = "settings_llm_api_key_v1" // legacy mirror only
         static let llmModel = "settings_llm_model_v1"
         static let iCloudAutoBackup = "settings_icloud_auto_backup_v1"
-        static let isSponsored = "settings_is_sponsored_v1"
         static let fuzzyNeighborEnabled = "settings_fuzzy_neighbor_v1"
         static let hapticsEnabled = "settings_haptics_v1"
         static let soundsEnabled = "settings_sounds_v1"
@@ -30,14 +29,13 @@ final class AppSettings: @unchecked Sendable {
         var llmAPIKey: String
         var llmModel: String
         var iCloudAutoBackup: Bool
-        var isSponsored: Bool
         var fuzzyNeighborEnabled: Bool
         var hapticsEnabled: Bool
         var soundsEnabled: Bool
 
         enum CodingKeys: String, CodingKey {
             case llmEnabled, llmBaseURL, llmAPIKey, llmModel, iCloudAutoBackup
-            case isSponsored, fuzzyNeighborEnabled, hapticsEnabled, soundsEnabled
+            case fuzzyNeighborEnabled, hapticsEnabled, soundsEnabled
         }
 
         init(
@@ -46,7 +44,6 @@ final class AppSettings: @unchecked Sendable {
             llmAPIKey: String,
             llmModel: String,
             iCloudAutoBackup: Bool,
-            isSponsored: Bool,
             fuzzyNeighborEnabled: Bool,
             hapticsEnabled: Bool,
             soundsEnabled: Bool
@@ -56,7 +53,6 @@ final class AppSettings: @unchecked Sendable {
             self.llmAPIKey = llmAPIKey
             self.llmModel = llmModel
             self.iCloudAutoBackup = iCloudAutoBackup
-            self.isSponsored = isSponsored
             self.fuzzyNeighborEnabled = fuzzyNeighborEnabled
             self.hapticsEnabled = hapticsEnabled
             self.soundsEnabled = soundsEnabled
@@ -69,7 +65,6 @@ final class AppSettings: @unchecked Sendable {
             llmAPIKey = try c.decodeIfPresent(String.self, forKey: .llmAPIKey) ?? ""
             llmModel = try c.decodeIfPresent(String.self, forKey: .llmModel) ?? ""
             iCloudAutoBackup = try c.decodeIfPresent(Bool.self, forKey: .iCloudAutoBackup) ?? false
-            isSponsored = try c.decodeIfPresent(Bool.self, forKey: .isSponsored) ?? false
             fuzzyNeighborEnabled = try c.decodeIfPresent(Bool.self, forKey: .fuzzyNeighborEnabled) ?? true
             hapticsEnabled = try c.decodeIfPresent(Bool.self, forKey: .hapticsEnabled) ?? true
             soundsEnabled = try c.decodeIfPresent(Bool.self, forKey: .soundsEnabled) ?? true
@@ -174,17 +169,7 @@ final class AppSettings: @unchecked Sendable {
         set { update { $0.iCloudAutoBackup = newValue } }
     }
 
-    /// One-time sponsor unlock (StoreKit non-consumable).
-    var isSponsored: Bool {
-        get {
-            reloadFromDiskIfNeeded()
-            if let fileCache { return fileCache.isSponsored }
-            return defaults.bool(forKey: Key.isSponsored)
-        }
-        set { update { $0.isSponsored = newValue } }
-    }
-
-    /// Neighbor-key / missing-key fuzzy. Default ON. Free users stay ON; paid may turn off.
+    /// Neighbor-key / missing-key fuzzy. Default ON.
     var fuzzyNeighborEnabled: Bool {
         get {
             reloadFromDiskIfNeeded()
@@ -192,11 +177,7 @@ final class AppSettings: @unchecked Sendable {
             if defaults.object(forKey: Key.fuzzyNeighborEnabled) == nil { return true }
             return defaults.bool(forKey: Key.fuzzyNeighborEnabled)
         }
-        set {
-            // Free users cannot disable.
-            let resolved = isSponsored ? newValue : true
-            update { $0.fuzzyNeighborEnabled = resolved }
-        }
+        set { update { $0.fuzzyNeighborEnabled = newValue } }
     }
 
     var hapticsEnabled: Bool {
@@ -219,14 +200,8 @@ final class AppSettings: @unchecked Sendable {
         set { update { $0.soundsEnabled = newValue } }
     }
 
-    /// Effective fuzzy: always true unless sponsored AND user turned it off.
-    var fuzzyNeighborEffective: Bool {
-        if !isSponsored { return true }
-        return fuzzyNeighborEnabled
-    }
-
     var canUseLLM: Bool {
-        isSponsored && llmEnabled && hasUsableAPIKey
+        llmEnabled && hasUsableAPIKey
     }
 
     /// True when a real API key is available to this process (host or keyboard).
@@ -238,7 +213,6 @@ final class AppSettings: @unchecked Sendable {
     /// Why the keyboard cannot run LLM right now (empty if OK).
     var llmBlockedReason: String {
         reloadFromDisk()
-        if !isSponsored { return "需先贊助／測試解鎖" }
         if !llmEnabled { return "LLM已關閉：App→LLM打開開關" }
         if !hasUsableAPIKey { return "LLM未設定API Key" }
         return ""
@@ -255,11 +229,10 @@ final class AppSettings: @unchecked Sendable {
         } else {
             parts.append("設定檔：無容器路徑")
         }
-        parts.append(isSponsored ? "贊助：已解鎖" : "贊助：未解鎖（LLM 需單次贊助）")
         parts.append(llmEnabled ? "開關：開" : "開關：關")
         parts.append(hasUsableAPIKey ? "Key：已填" : "Key：未填／鍵盤讀不到")
         parts.append("Model：\(llmModel)")
-        parts.append(fuzzyNeighborEffective ? "臨近鍵容錯：開" : "臨近鍵容錯：關")
+        parts.append(fuzzyNeighborEnabled ? "臨近鍵容錯：開" : "臨近鍵容錯：關")
         return parts.joined(separator: "\n")
     }
 
@@ -272,7 +245,6 @@ final class AppSettings: @unchecked Sendable {
             defaults.set(payload.llmBaseURL, forKey: Key.llmBaseURL)
             defaults.set(payload.llmModel, forKey: Key.llmModel)
             defaults.set(payload.iCloudAutoBackup, forKey: Key.iCloudAutoBackup)
-            defaults.set(payload.isSponsored, forKey: Key.isSponsored)
             defaults.set(payload.fuzzyNeighborEnabled, forKey: Key.fuzzyNeighborEnabled)
             defaults.set(payload.hapticsEnabled, forKey: Key.hapticsEnabled)
             defaults.set(payload.soundsEnabled, forKey: Key.soundsEnabled)
@@ -318,7 +290,6 @@ final class AppSettings: @unchecked Sendable {
             llmAPIKey: KeychainStore.get(account: apiKeyAccount) == nil ? (defaults.string(forKey: Key.llmAPIKey) ?? "") : "•keychain•",
             llmModel: defaults.string(forKey: Key.llmModel) ?? "",
             iCloudAutoBackup: defaults.bool(forKey: Key.iCloudAutoBackup),
-            isSponsored: defaults.bool(forKey: Key.isSponsored),
             fuzzyNeighborEnabled: defaults.object(forKey: Key.fuzzyNeighborEnabled) == nil
                 ? true : defaults.bool(forKey: Key.fuzzyNeighborEnabled),
             hapticsEnabled: defaults.object(forKey: Key.hapticsEnabled) == nil
@@ -337,7 +308,6 @@ final class AppSettings: @unchecked Sendable {
         defaults.set(payload.llmBaseURL, forKey: Key.llmBaseURL)
         defaults.set(payload.llmModel, forKey: Key.llmModel)
         defaults.set(payload.iCloudAutoBackup, forKey: Key.iCloudAutoBackup)
-        defaults.set(payload.isSponsored, forKey: Key.isSponsored)
         defaults.set(payload.fuzzyNeighborEnabled, forKey: Key.fuzzyNeighborEnabled)
         defaults.set(payload.hapticsEnabled, forKey: Key.hapticsEnabled)
         defaults.set(payload.soundsEnabled, forKey: Key.soundsEnabled)
