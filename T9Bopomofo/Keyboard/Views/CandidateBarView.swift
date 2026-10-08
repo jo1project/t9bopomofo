@@ -5,6 +5,7 @@ final class CandidateBarView: UIView {
     var onSelect: ((Candidate) -> Void)?
     var onToggleExpand: (() -> Void)?
     var onDismissKeyboard: (() -> Void)?
+    var onPreeditTap: (() -> Void)?
 
     private let scroll = UIScrollView()
     private let stack = UIStackView()
@@ -34,6 +35,7 @@ final class CandidateBarView: UIView {
         preeditContainer.translatesAutoresizingMaskIntoConstraints = false
         preeditContainer.layer.cornerRadius = 8
         preeditContainer.addSubview(preeditLabel)
+        preeditContainer.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(preeditTapped)))
 
         divider.translatesAutoresizingMaskIntoConstraints = false
 
@@ -211,6 +213,16 @@ final class CandidateBarView: UIView {
         btn.contentEdgeInsets = UIEdgeInsets(top: 7, left: 14, bottom: 7, right: 14)
         btn.layer.cornerRadius = 16 // pill: fully rounded against the ~32pt tall button
         KeyboardChrome.applyKeyShadow(btn.layer)
+    }
+
+    @objc private func preeditTapped() { onPreeditTap?() }
+
+    /// Timing overlay text after the preedit; the chip truncates from the head, so it stays visible.
+    func appendToPreedit(_ text: String) {
+        preeditLabel.text = (preeditLabel.text ?? "") + text
+        preeditMaxWidth?.constant = 200
+        preeditContainer.isHidden = false
+        divider.isHidden = false
     }
 
     @objc private func tap(_ sender: UIButton) {

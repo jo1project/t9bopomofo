@@ -17,7 +17,7 @@ enum FuzzyMatcher {
         guard digits.count >= 2 else { return [] }
 
         var matches: [Match] = []
-        let exactSet = Set(lexicon.exact(digits: digits).map(\.t9))
+        let exactSet = Set(lexicon.exact(digits: digits, limit: 1).map(\.t9))  // every hit's t9 == digits
 
         // The first digit is never mutated (positions start at 1 here and in insertionProbes):
         // DictionaryLoader shards by first digit and decodes a shard on first touch, so probing
@@ -30,7 +30,9 @@ enum FuzzyMatcher {
                     var mutated = Array(digits)
                     mutated[i] = n
                     let cand = String(mutated)
-                    for e in lexicon.exact(digits: cand) where !exactSet.contains(e.t9) {
+                    // Every match is distance 1 and the result is the top `limit` by weight, so a
+                    // probe's hits past its own top `limit` can never make it; short probes have hundreds.
+                    for e in lexicon.exact(digits: cand, limit: limit) where !exactSet.contains(e.t9) {
                         matches.append(Match(entry: e, distance: 1, kind: .fuzzyNeighbor))
                     }
                 }
@@ -42,7 +44,7 @@ enum FuzzyMatcher {
         if maxDistance >= 1 {
             let probes = insertionProbes(digits)
             for probe in probes {
-                for e in lexicon.exact(digits: probe) {
+                for e in lexicon.exact(digits: probe, limit: limit) {
                     matches.append(Match(entry: e, distance: 1, kind: .fuzzyMissing))
                 }
             }

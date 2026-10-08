@@ -11,6 +11,10 @@ final class UserLexicon: @unchecked Sendable {
     private var freq: [String: Int]
     private var bigram: [String: Int]
     private var recent: [String]
+    /// `bigram` regrouped as previous → next word → count. boost() runs for every candidate on
+    /// every keystroke and predictions() several times per commit; with the flat "prev\u{1f}word"
+    /// keys they concatenated a key per call and scanned all 5k+ bigrams, growing with use.
+    private var next: [String: [String: Int]] = [:]
 
     struct Snapshot: Codable, Equatable {
         var freq: [String: Int]
@@ -24,6 +28,7 @@ final class UserLexicon: @unchecked Sendable {
         freq = defaults.dictionary(forKey: freqKey) as? [String: Int] ?? [:]
         bigram = defaults.dictionary(forKey: bigramKey) as? [String: Int] ?? [:]
         recent = defaults.stringArray(forKey: recentKey) ?? []
+        rebuildNext()
         // Pull iCloud copy if local empty and auto-backup on
         if freq.isEmpty, AppSettings.shared.iCloudAutoBackup {
             _ = restoreFromiCloud(merge: false)
@@ -35,12 +40,21 @@ final class UserLexicon: @unchecked Sendable {
         if let previous, !previous.isEmpty {
             let key = previous + "\u{1f}" + word
             bigram[key, default: 0] += 1
+            next[previous, default: [:]][word, default: 0] += 1
         }
         recent.append(word)
         if recent.count > 64 { recent.removeFirst(recent.count - 64) }
         Self.prune(&freq, max: Self.maxFreq)
-        Self.prune(&bigram, max: Self.maxBigram)
+        if Self.prune(&bigram, max: Self.maxBigram) { rebuildNext() }
         scheduleFlush()
+    }
+
+    private func rebuildNext() {
+        next = [:]
+        for (key, count) in bigram {
+            guard let sep = key.firstIndex(of: "\u{1f}") else { continue }
+            next[String(key[..<sep]), default: [:]][String(key[key.index(after: sep)...])] = count
+        }
     }
 
     // Measured (Scripts/bench_baseline_main.swift): a commit rewrote both whole dictionaries into
@@ -54,28 +68,48 @@ final class UserLexicon: @unchecked Sendable {
     /// doesn't re-sort on every commit.
     /// ponytail: least-frequent eviction, ties arbitrary — a brand-new word (count 1) can be evicted
     /// before its second use; add a recency tiebreak if that shows up in practice.
-    private static func prune(_ d: inout [String: Int], max: Int) {
-        guard d.count > max + max / 4 else { return }
+    /// Returns true if it pruned.
+    @discardableResult
+    private static func prune(_ d: inout [String: Int], max: Int) -> Bool {
+        guard d.count > max + max / 4 else { return false }
         d = Dictionary(uniqueKeysWithValues: d.sorted { $0.value > $1.value }.prefix(max).map { ($0.key, $0.value) })
+        return true
     }
+
+    /// Serial, so a background flush and a later synchronous one land in order.
+    private static let io = DispatchQueue(label: "t9.userlexicon.io", qos: .utility)
 
     private func scheduleFlush() {
         flushWork?.cancel()
-        let work = DispatchWorkItem { [weak self] in self?.flush() }
+        let work = DispatchWorkItem { [weak self] in self?.write(background: true) }
         flushWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: work)
     }
 
     /// Writes pending commits now. Call when the keyboard goes away: a suspended extension
     /// may never run the 2s timer.
-    func flush() {
+    func flush() { write(background: false) }
+
+    /// The idle flush rewrote both dictionaries plus the iCloud JSON on the main thread (~40ms
+    /// once full), stalling the first key typed after a pause; it now runs on `io`.
+    private func write(background: Bool) {
         guard let work = flushWork else { return }
         work.cancel()
         flushWork = nil
-        persist()
-        if AppSettings.shared.iCloudAutoBackup {
-            backupToiCloud()
+        let snap = makeSnapshot()
+        let backup = AppSettings.shared.iCloudAutoBackup
+        let job = { [defaults = self.defaults, freqKey = self.freqKey, bigramKey = self.bigramKey,
+                     recentKey = self.recentKey, iCloudKey = self.iCloudKey] in
+            defaults.set(snap.freq, forKey: freqKey)
+            defaults.set(snap.bigram, forKey: bigramKey)
+            defaults.set(snap.recent, forKey: recentKey)
+            if backup, let data = try? JSONEncoder().encode(snap) {
+                let store = NSUbiquitousKeyValueStore.default
+                store.set(data, forKey: iCloudKey)
+                store.synchronize()
+            }
         }
+        if background { Self.io.async(execute: job) } else { Self.io.sync(execute: job) }
     }
 
     func boost(for word: String, previous: String?) -> Double {
@@ -85,21 +119,16 @@ final class UserLexicon: @unchecked Sendable {
         // gap, so a picked word never visibly moved up. Scaled to the same order of
         // magnitude as toneScore's ±12,000/-18,000 so a few picks reliably win.
         var score = Double(freq[word, default: 0]) * 4_000
-        if let previous, !previous.isEmpty {
-            let key = previous + "\u{1f}" + word
-            score += Double(bigram[key, default: 0]) * 8_000
+        if let previous, let count = next[previous]?[word] {
+            score += Double(count) * 8_000
         }
         return score
     }
 
     /// Predictions after a committed word.
     func predictions(after word: String, limit: Int = 6) -> [String] {
-        let prefix = word + "\u{1f}"
-        let ranked = bigram
-            .filter { $0.key.hasPrefix(prefix) }
-            .map { (String($0.key.dropFirst(prefix.count)), $0.value) }
-            .sorted { $0.1 > $1.1 }
-        return Array(ranked.prefix(limit).map(\.0))
+        guard let followers = next[word] else { return [] }
+        return Array(followers.sorted { $0.value > $1.value }.prefix(limit).map(\.key))
     }
 
     var statsSummary: String {
@@ -139,6 +168,7 @@ final class UserLexicon: @unchecked Sendable {
         }
         Self.prune(&freq, max: Self.maxFreq)
         Self.prune(&bigram, max: Self.maxBigram)
+        rebuildNext()
         persist()
     }
 

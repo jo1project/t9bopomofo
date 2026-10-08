@@ -336,17 +336,19 @@ def tone_score_by_position(tone_marks, tones: str, syllable_lengths: list[int]) 
     candidate's own syllable boundary at that digit count, not by press order."""
     if not tone_marks:
         return 0.0
-    tone_chars = list(tones)
-    if len(tone_chars) != len(syllable_lengths):
+    if len(tones) != len(syllable_lengths):
         return 0.0
-    boundary_for_digits: dict[int, str] = {}
-    boundary = 0
-    for length, t in zip(syllable_lengths, tone_chars):
-        boundary += length
-        boundary_for_digits[boundary] = t
     bonus = 0.0
     for at_digits, tone in tone_marks:
-        entry_tone = boundary_for_digits.get(at_digits)
+        # Same allocation-free scan as the Swift: stop at the first boundary >= the press.
+        entry_tone = None
+        boundary = 0
+        for length, t in zip(syllable_lengths, tones):
+            boundary += length
+            if boundary >= at_digits:
+                if boundary == at_digits:
+                    entry_tone = t
+                break
         if entry_tone is None:
             bonus -= 500
             continue
@@ -534,6 +536,56 @@ def test_xiang_yixia_long_input():
     print("xiang_yixia_long_input OK", paths[:3])
 
 
+def t9_sort(items, digits_count, tones=""):
+    """Mirrors T9SortFilter.sort (items: (text, coverage, score), pre-sorted by score desc)."""
+    stream = "x" * digits_count + tones
+    full, buckets, orphans, partials = [], {}, [], 0
+    for text, cov, score in items:
+        if cov != digits_count:
+            partials += 1
+            if partials > 80:
+                continue
+        if cov == digits_count:
+            full.append(text)
+        elif cov < len(stream) and stream[cov] in "qwxy":
+            orphans.append(text)
+        else:
+            buckets.setdefault(cov, []).append(text)
+    ordered = list(full)
+    for rnd in range(41):
+        for cov in sorted(buckets, reverse=True):
+            if rnd < len(buckets[cov]):
+                ordered.append(buckets[cov][rnd])
+    ordered += orphans
+    return list(dict.fromkeys(ordered))
+
+
+def test_span_pretrim_matches_full_sort():
+    """InputEngine builds Candidates only for the top `limit` distinct full-coverage texts and
+    the top 80 partial spans; the sorted bar must be identical to building them all."""
+    by_t9: dict[str, list] = {}
+    for word, reading, t9, weight in load_all():
+        by_t9.setdefault(t9, []).append((word, weight))
+    limit = 12
+    for reading in ["ㄒㄧㄤˇ ㄧ ㄒㄧㄚˋ", "ㄉㄢˋ ㄕˋ", "ㄓ", "ㄨㄛˇ ㄐㄧㄣ ㄊㄧㄢ ㄑㄩˋ"]:
+        digits = encode_reading(reading)
+        hits = [(w, n, float(wt)) for n in range(1, min(12, len(digits)) + 1)
+                for w, wt in by_t9.get(digits[:n], [])]
+        everything = sorted(hits, key=lambda h: -h[2])
+        full = [h for h in everything if h[1] == len(digits)]
+        kept, texts = [], set()
+        for h in full:
+            if h[0] not in texts:
+                if len(texts) >= limit:
+                    break
+                texts.add(h[0])
+            kept.append(h)
+        kept += [h for h in everything if h[1] != len(digits)][:80]
+        trimmed = sorted(kept, key=lambda h: -h[2])
+        assert t9_sort(everything, len(digits))[:limit] == t9_sort(trimmed, len(digits))[:limit], reading
+    print("span_pretrim_matches_full_sort OK")
+
+
 def main() -> int:
     test_encode_samples()
     test_dict_contains_targets()
@@ -548,6 +600,7 @@ def main() -> int:
     test_fullcoverage_survives_tone_press()
     test_chi_reachable_with_tone()
     test_xiang_yixia_long_input()
+    test_span_pretrim_matches_full_sort()
     print("ALL PASSED")
     return 0
 
