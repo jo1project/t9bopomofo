@@ -123,13 +123,8 @@ final class DictionaryLoader: @unchecked Sendable {
     /// No-op in the eager (non-sharded) path, where everything is already loaded.
     private func ensureShardLoaded(_ key: Character) {
         guard let bundle = shardBundle, shards[key] == nil else { return }
-        syncDecodes += 1
         shards[key] = Self.decodeShard(key, bundle: bundle)
     }
-
-    /// Shards decoded on the main thread because the preload hadn't reached them; shown by the
-    /// keyboard's timing overlay.
-    private(set) var syncDecodes = 0
 
     /// All lexicon hits whose T9 exactly equals a prefix of `digits` (Rime partial spans).
     ///

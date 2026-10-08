@@ -127,9 +127,6 @@ final class InputEngine: ObservableObject {
         return commitSuggestion(candidate.text)
     }
 
-    /// Dictionary shards decoded on the main thread so far (timing overlay).
-    var shardSyncDecodes: Int { lexicon.syncDecodes }
-
     /// Writes pending user-dictionary changes; the keyboard is going away.
     func flushUserLexicon() { userLexicon.flush() }
 
