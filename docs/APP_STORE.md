@@ -128,4 +128,33 @@ The app collects no data, has no accounts, ads, analytics or in-app purchases.
 
 - [x] **地球鍵（審核準則 4.4.1）：** 有 Home 鍵的 iPhone（SE 2/3）系統不顯示地球鍵，候選列右側會出現 🌐（點一下換下一個鍵盤、長按選鍵盤）。
 - [ ] 分支 merge 進 main 後，隱私權政策網址才會生效（網址指向 main）。
-- [x] 版本號 1.0.0（`project.yml`、兩個 `Info.plist`、`testflight.yml`、`codemagic.yaml` 都要一起改）。
+- [x] 版本號與 build 號碼照下方「版本號與 build 號碼」檢查過。
+
+## 版本號與 build 號碼
+
+每次推 TestFlight 前都要檢查這兩個號碼，否則 App Store Connect 會拒收。
+
+**版本號（CFBundleShortVersionString）**
+- 某個版本一旦通過審核，就不能再上傳同版本號的新 build（錯誤 90062：must contain a higher version than that of the previously approved version）。
+- 修 bug 升最後一碼（1.0.0 → 1.0.1），加新功能升中間那碼（1.0.x → 1.1.0）。
+- 五個地方要一起改：
+  - `project.yml` 的 `MARKETING_VERSION`（3 處）
+  - `T9Bopomofo/App/Info.plist`
+  - `T9Bopomofo/Keyboard/Info.plist`
+  - `.github/workflows/testflight.yml`（寫死在 `plutil` 和 `echo` 裡）
+  - `codemagic.yaml`（寫死在 `plutil`、`PlistBuddy` 和 `echo` 裡）
+
+**Build 號碼（CFBundleVersion）**
+- `testflight.yml` 執行時用 `project.yml` 的 `CURRENT_PROJECT_VERSION` 加 1，但**不會把新號碼存回 repo**，所以從不同分支或連續觸發都會撞號。
+- 推之前先查最後一次上傳用的號碼：`gh run list --workflow testflight.yml` 找出最近幾次執行，再到各自的 log 找 `New build: N`（所有分支都算）。
+- 把 `project.yml` 的 `CURRENT_PROJECT_VERSION`（3 處）改成那個 N，這次上傳就會是 N+1。
+- `codemagic.yaml` 會自己去 App Store Connect 查最新號碼，不需要手動改。
+
+**紀錄**
+
+| 版本 | Build | 來源 | 狀態 |
+|---|---|---|---|
+| 1.0.0 | 89 | main | 已上架 |
+| 1.0.0 | 90 | main（PR #8 merge） | TestFlight |
+| 1.0.0 | 91 | fix/iphone-only-device-family | TestFlight |
+| 1.0.1 | 92 | perf/keystroke-lag | TestFlight |

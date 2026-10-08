@@ -21,7 +21,9 @@ final class InputEngine: ObservableObject {
     /// Zhuyin symbol the user long-pressed at each composing-digit position (e.g. ㄅ rather than
     /// ㄉ/ㄚ on key 1). Candidates that read differently at that position are dropped.
     private var exactTokens: [Int: Character] = [:]
-    private var candidateLimit = 40  // ponytail: 12->40 so rare chars appear
+    /// The bar's 12. It started at 40, but every commit's collapse reset it to 12; the expanded
+    /// panel raises it to 64 so rare chars still appear there.
+    private var candidateLimit = 12
     private var llmTask: Task<Void, Never>?
     private var lastPredictionContext: String = ""
 
@@ -263,32 +265,46 @@ final class InputEngine: ObservableObject {
         var items: [T9SortFilter.Item] = []
         let digits = composingDigits
         let inputStream = T9SortFilter.combinedInput(digits: digits, tones: composingTones)
+        let prev: String? = lastCommitted.isEmpty ? nil : lastCommitted
 
+        // Score every span hit (~1,200 on a 7-key input) but build Candidates only for those that
+        // can still be shown: T9SortFilter keeps just the top 80 partial spans by score, and
+        // full-coverage items are listed by score with repeated texts dropped, so nothing past
+        // the first `candidateLimit` distinct full texts survives. Same output, far fewer
+        // string-building allocations per keystroke.
+        var fullHits: [(entry: LexiconEntry, score: Double)] = []
+        var partialHits: [(entry: LexiconEntry, coverage: Int, score: Double)] = []
         for (span, entries) in lexicon.prefixSpans(of: digits) {
+            let coverage = span.utf8.count
             for e in entries where !violatesExactTokens(e.reading) {
-                let toneBonus = toneScore(tones: e.tones, syllableLengths: e.syllableLengths)
-                let userBoost = userLexicon.boost(for: e.word, previous: lastCommitted.isEmpty ? nil : lastCommitted)
-                let score = Double(e.weight) + toneBonus + userBoost
-                let cand = Candidate(
-                    id: "span-\(span)-\(e.word)-\(e.reading)",
-                    text: e.word,
-                    reading: e.reading,
-                    score: score,
-                    source: .exact
-                )
-                items.append(T9SortFilter.Item(
-                    candidate: cand,
-                    coverage: span.count,
-                    fullCoverage: span.count == digits.count,
-                    orphanTone: false
-                ))
+                let score = Double(e.weight)
+                    + toneScore(tones: e.tones, syllableLengths: e.syllableLengths)
+                    + userLexicon.boost(for: e.word, previous: prev)
+                if coverage == digits.utf8.count {
+                    fullHits.append((e, score))
+                } else {
+                    partialHits.append((e, coverage, score))
+                }
             }
+        }
+        fullHits.sort { $0.score > $1.score }
+        var fullTexts = Set<String>()
+        for hit in fullHits {
+            if !fullTexts.contains(hit.entry.word) {
+                guard fullTexts.count < candidateLimit else { break }
+                fullTexts.insert(hit.entry.word)
+            }
+            items.append(spanItem(hit.entry, coverage: digits.count, score: hit.score, digits: digits))
+        }
+        partialHits.sort { $0.score > $1.score }
+        for hit in partialHits.prefix(80) {
+            items.append(spanItem(hit.entry, coverage: hit.coverage, score: hit.score, digits: digits))
         }
 
         if let phrase = PhraseSegmenter.bestPhrase(digits: digits, lexicon: lexicon),
            !violatesExactTokens(phrase.reading) {
             let toneBonus = toneScore(tones: phrase.tones, syllableLengths: phrase.syllableLengths)
-            let userBoost = userLexicon.boost(for: phrase.word, previous: lastCommitted.isEmpty ? nil : lastCommitted)
+            let userBoost = userLexicon.boost(for: phrase.word, previous: prev)
             items.append(T9SortFilter.Item(
                 candidate: Candidate(
                     id: "ph-\(phrase.word)-\(phrase.reading)",
@@ -310,13 +326,13 @@ final class InputEngine: ObservableObject {
         }
         for (pi, path) in paths.enumerated() {
             let toneBonus = toneScore(tones: path.tones, syllableLengths: path.syllableLengths)
-            let userBoost = userLexicon.boost(for: path.text, previous: lastCommitted.isEmpty ? nil : lastCommitted)
+            let userBoost = userLexicon.boost(for: path.text, previous: prev)
             // Proportional (not flat) penalty: libchewing single-char weights can be ~10x a real
             // phrase's weight, so a flat penalty is swamped and a chop of two common chars
             // (e.g. 但+試) out-ranks the real phrase (但是). Scale the penalty to the path's own
             // weight so it stays meaningful regardless of the corpus's weight range.
             // ponytail: 0.75 is a tuned constant, not a language model — revisit if mis-ranks show up.
-            let segCount = Double(max(0, path.entries.count - 1))
+            let segCount = Double(max(0, path.count - 1))
             let segPenalty = Double(path.weight) * segCount * 0.75
             let pathItem = T9SortFilter.Item(
                 candidate: Candidate(
@@ -331,13 +347,13 @@ final class InputEngine: ObservableObject {
                 orphanTone: false
             )
             if !violatesExactTokens(path.reading) { items.append(pathItem) }
-            if let first = path.entries.first, path.entries.count > 1, !violatesExactTokens(first.reading) {
+            if path.count > 1, let first = path.entries.first, !violatesExactTokens(first.reading) {
                 items.append(T9SortFilter.Item(
                     candidate: Candidate(
                         id: "seg1-\(pi)-\(first.word)",
                         text: first.word,
                         reading: first.reading,
-                        score: Double(first.weight) + toneScore(tones: first.tones, syllableLengths: first.syllableLengths) + userLexicon.boost(for: first.word, previous: lastCommitted.isEmpty ? nil : lastCommitted),
+                        score: Double(first.weight) + toneScore(tones: first.tones, syllableLengths: first.syllableLengths) + userLexicon.boost(for: first.word, previous: prev),
                         source: .exact
                     ),
                     coverage: first.t9.count,
@@ -351,7 +367,7 @@ final class InputEngine: ObservableObject {
             for m in FuzzyMatcher.fuzzy(digits: digits, lexicon: lexicon, maxDistance: 1, limit: 12)
             where !violatesExactTokens(m.entry.reading) {
                 let toneBonus = toneScore(tones: m.entry.tones, syllableLengths: m.entry.syllableLengths) * 0.5
-                let userBoost = userLexicon.boost(for: m.entry.word, previous: lastCommitted.isEmpty ? nil : lastCommitted)
+                let userBoost = userLexicon.boost(for: m.entry.word, previous: prev)
                 items.append(T9SortFilter.Item(
                     candidate: Candidate(
                         id: "fz-\(m.entry.word)-\(m.entry.reading)",
@@ -370,6 +386,21 @@ final class InputEngine: ObservableObject {
         items.sort { $0.candidate.score > $1.candidate.score }
         let sorted = T9SortFilter.sort(items: items, inputDigitsAndTones: inputStream, digitsCount: digits.count)
         candidates = Array(sorted.prefix(candidateLimit))
+    }
+
+    private func spanItem(_ e: LexiconEntry, coverage: Int, score: Double, digits: String) -> T9SortFilter.Item {
+        T9SortFilter.Item(
+            candidate: Candidate(
+                id: "span-\(digits.prefix(coverage))-\(e.word)-\(e.reading)",
+                text: e.word,
+                reading: e.reading,
+                score: score,
+                source: .exact
+            ),
+            coverage: coverage,
+            fullCoverage: coverage == digits.count,
+            orphanTone: false
+        )
     }
 
     /// True if `reading` has a different zhuyin symbol than the one long-pressed at that position.
@@ -391,21 +422,27 @@ final class InputEngine: ObservableObject {
     /// the segment are ignored instead of penalized.
     private func toneScore(tones entryTones: String, syllableLengths: String, offset: Int? = nil) -> Double {
         guard !toneMarks.isEmpty else { return 0 }
-        let toneChars = Array(entryTones)
         let lengths = syllableLengths.utf8  // one ASCII digit per syllable
-        guard toneChars.count == lengths.count else { return 0 }
-
-        var boundaryForDigits: [Int: Character] = [:]
-        var boundary = offset ?? 0
-        for (i, len) in lengths.enumerated() {
-            boundary += Int(len) - 48  // ASCII '0'
-            boundaryForDigits[boundary] = toneChars[i]
-        }
+        guard entryTones.count == lengths.count else { return 0 }
+        // Runs for every hit on every keystroke once a tone is typed: no arrays or dictionaries.
+        let start = offset ?? 0
+        var end = start
+        for len in lengths { end += Int(len) - 48 }  // ASCII '0'
 
         var bonus: Double = 0
         for mark in toneMarks {
-            if let offset, mark.digits <= offset || mark.digits > boundary { continue }
-            guard let entryTone = boundaryForDigits[mark.digits] else {
+            if offset != nil, mark.digits <= start || mark.digits > end { continue }
+            // Tone of the syllable that ends exactly where the tone key was pressed.
+            var boundary = start
+            var matched: Character?
+            for (len, tone) in zip(lengths, entryTones) {
+                boundary += Int(len) - 48
+                if boundary >= mark.digits {
+                    if boundary == mark.digits { matched = tone }
+                    break
+                }
+            }
+            guard let entryTone = matched else {
                 bonus -= 500 // this candidate doesn't have a syllable break where the tone was pressed
                 continue
             }

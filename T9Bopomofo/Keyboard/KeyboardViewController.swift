@@ -174,8 +174,7 @@ final class KeyboardViewController: UIInputViewController {
 
     /// After committing text, ask LLM using document tail (not only the last word).
     private func refreshPredictionsAfterCommit(inserted: String) {
-        reloadCandidates()
-        guard !inserted.isEmpty else { return }
+        guard !inserted.isEmpty else { return reloadCandidates() }
         let before = textDocumentProxy.documentContextBeforeInput ?? ""
         let context = before.isEmpty ? inserted : before
         engine.requestNextWordPredictions(context: context, hasNetworkAccess: hasFullAccess)
@@ -239,9 +238,10 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func collapseCandidates() {
+        // Called on every commit; only a real collapse needs the candidates recomputed at 12.
+        if candidatesExpanded { engine.setCandidateLimit(12) }
         candidatesExpanded = false
         candidateBar.setExpanded(false)
-        engine.setCandidateLimit(12)
         candidatePanel?.removeFromSuperview()
         candidatePanel = nil
         keyboardContainer.isHidden = false
@@ -404,9 +404,6 @@ final class KeyboardViewController: UIInputViewController {
             collapseCandidates()
             renderKeyboard()
             return
-        }
-        if candidatesExpanded {
-            engine.setCandidateLimit(64)
         }
         // ponytail: update space key label dynamically
         zhuyinKeyboard?.updateSpaceKey(isComposing: engine.isComposing)

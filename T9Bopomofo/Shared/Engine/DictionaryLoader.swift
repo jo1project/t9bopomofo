@@ -108,7 +108,7 @@ final class DictionaryLoader: @unchecked Sendable {
     }
 
     private func preloadShards(bundle: Bundle) {
-        DispatchQueue.global(qos: .utility).async { [weak self] in
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             for key in Self.shardKeys {
                 let shard = Self.decodeShard(key, bundle: bundle)
                 DispatchQueue.main.async {
@@ -150,11 +150,12 @@ final class DictionaryLoader: @unchecked Sendable {
         return result
     }
 
-    func exact(digits: String) -> [LexiconEntry] {
+    /// `limit`: only the top hits by weight, without copying the whole bucket first.
+    func exact(digits: String, limit: Int = .max) -> [LexiconEntry] {
         guard let first = digits.first else { return [] }
         ensureShardLoaded(first)
         guard let shard = shards[first], let idxs = shard.index[digits] else { return [] }
-        return idxs.map { shard.entries[$0] }  // buckets are built weight-descending
+        return idxs.prefix(limit).map { shard.entries[$0] }  // buckets are built weight-descending
     }
 
     // MARK: - Parse
