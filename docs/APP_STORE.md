@@ -158,3 +158,4 @@ The app collects no data, has no accounts, ads, analytics or in-app purchases.
 | 1.0.0 | 90 | main（PR #8 merge） | TestFlight |
 | 1.0.0 | 91 | fix/iphone-only-device-family | TestFlight |
 | 1.0.1 | 92 | perf/keystroke-lag | TestFlight |
+| 1.0.1 | 93 | main（PR #9 merge，手動觸發） | TestFlight |
