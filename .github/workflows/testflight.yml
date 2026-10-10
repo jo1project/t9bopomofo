@@ -103,12 +103,12 @@ jobs:
 
           # Update Info.plist files
           plutil -replace CFBundleVersion -string "$NEW" T9Bopomofo/App/Info.plist
-          plutil -replace CFBundleShortVersionString -string "1.0.1" T9Bopomofo/App/Info.plist
+          plutil -replace CFBundleShortVersionString -string "1.0.2" T9Bopomofo/App/Info.plist
 
           plutil -replace CFBundleVersion -string "$NEW" T9Bopomofo/Keyboard/Info.plist
-          plutil -replace CFBundleShortVersionString -string "1.0.1" T9Bopomofo/Keyboard/Info.plist
+          plutil -replace CFBundleShortVersionString -string "1.0.2" T9Bopomofo/Keyboard/Info.plist
 
-          echo "✓ Version 1.0.1 ($NEW)"
+          echo "✓ Version 1.0.2 ($NEW)"
 
       - name: Build and Archive
         run: |

@@ -43,20 +43,20 @@ workflows:
 
           # Update App Info.plist
           plutil -replace CFBundleVersion -string "$NEW" T9Bopomofo/App/Info.plist
-          plutil -replace CFBundleShortVersionString -string "1.0.1" T9Bopomofo/App/Info.plist
+          plutil -replace CFBundleShortVersionString -string "1.0.2" T9Bopomofo/App/Info.plist
 
           # Update Keyboard Info.plist - ensure version matches
           if [ -f T9Bopomofo/Keyboard/Info.plist ]; then
             /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $NEW" T9Bopomofo/Keyboard/Info.plist \
               || /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $NEW" T9Bopomofo/Keyboard/Info.plist \
               || true
-            /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString 1.0.1" T9Bopomofo/Keyboard/Info.plist \
-              || /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string 1.0.1" T9Bopomofo/Keyboard/Info.plist \
+            /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString 1.0.2" T9Bopomofo/Keyboard/Info.plist \
+              || /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string 1.0.2" T9Bopomofo/Keyboard/Info.plist \
               || true
           fi
 
-          echo "App version: 1.0.1 ($NEW)"
-          echo "Keyboard version: 1.0.1 ($NEW)"
+          echo "App version: 1.0.2 ($NEW)"
+          echo "Keyboard version: 1.0.2 ($NEW)"
       - name: Build with Codemagic
         script: |
           # Let Codemagic handle signing automatically via integration
