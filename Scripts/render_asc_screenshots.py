@@ -416,7 +416,7 @@ def shot_llm():
     messages(d, "阿哲", [(False, "明天下午三點開會喔"), (False, "記得帶筆電")], "好的，我會準時到")
     llm = ["收到", "謝謝提醒", "到時候見"]
     keyboard(im, items=llm, llm=set(llm))
-    return framed(im, "免費使用\n可接自己的 AI 聯想", "支援 OpenAI 相容 API，自備 Key 直接連線")
+    return framed(im, "接上自己的 AI\n聯想更聰明", "支援 OpenAI 相容 API，自備 Key 直接連線")
 
 
 def shot_setup():
