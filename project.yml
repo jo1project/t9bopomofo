@@ -15,8 +15,8 @@ settings:
     CODE_SIGN_STYLE: Automatic
     CODE_SIGNING_ALLOWED: YES
     DEVELOPMENT_TEAM: S24Z424MU4
-    MARKETING_VERSION: "1.0.1"
-    CURRENT_PROJECT_VERSION: "93"
+    MARKETING_VERSION: "1.0.2"
+    CURRENT_PROJECT_VERSION: "94"
 
 targets:
   T9Bopomofo:
@@ -27,6 +27,7 @@ targets:
       - path: T9Bopomofo/Shared
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.jo1project.t9bopomofo
+      TARGETED_DEVICE_FAMILY: "1"  # target level: XcodeGen's iOS preset otherwise sets "1,2" here
       INFOPLIST_FILE: T9Bopomofo/App/Info.plist
       CODE_SIGN_ENTITLEMENTS: T9Bopomofo/App/App.entitlements
       ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -34,8 +35,8 @@ targets:
       CODE_SIGN_STYLE: Manual
       CODE_SIGN_IDENTITY: "Apple Distribution"
       PROVISIONING_PROFILE_SPECIFIER: ""
-      MARKETING_VERSION: "1.0.1"
-      CURRENT_PROJECT_VERSION: "93"
+      MARKETING_VERSION: "1.0.2"
+      CURRENT_PROJECT_VERSION: "94"
     dependencies:
       - target: T9Keyboard
         embed: true
@@ -55,7 +56,7 @@ targets:
         buildPhase: resources
         type: folder
     prebuildScripts:
-      - name: Generate sharded lexicon-*.bin
+      - name: Generate lexicon.bin
         inputFiles:
           - $(SRCROOT)/Resources/chewing/chewing_base.dict.yaml
           - $(SRCROOT)/Resources/chewing/taiwan_phrases.dict.yaml
@@ -65,17 +66,7 @@ targets:
           - $(SRCROOT)/T9Bopomofo/Shared/Engine/DictionaryLoader.swift
           - $(SRCROOT)/Scripts/generate_lexicon_main.swift
         outputFiles:
-          - $(SRCROOT)/Resources/chewing/lexicon-0.bin
-          - $(SRCROOT)/Resources/chewing/lexicon-1.bin
-          - $(SRCROOT)/Resources/chewing/lexicon-2.bin
-          - $(SRCROOT)/Resources/chewing/lexicon-3.bin
-          - $(SRCROOT)/Resources/chewing/lexicon-4.bin
-          - $(SRCROOT)/Resources/chewing/lexicon-5.bin
-          - $(SRCROOT)/Resources/chewing/lexicon-6.bin
-          - $(SRCROOT)/Resources/chewing/lexicon-7.bin
-          - $(SRCROOT)/Resources/chewing/lexicon-8.bin
-          - $(SRCROOT)/Resources/chewing/lexicon-9.bin
-          - $(SRCROOT)/Resources/chewing/lexicon-v.bin
+          - $(SRCROOT)/Resources/chewing/lexicon.bin
         script: |
           set -euo pipefail
           GEN_SRC="$DERIVED_FILE_DIR/generate_lexicon.swift"
@@ -102,6 +93,7 @@ targets:
               "$SRCROOT/Resources/chewing"
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.jo1project.t9bopomofo.keyboard
+      TARGETED_DEVICE_FAMILY: "1"
       INFOPLIST_FILE: T9Bopomofo/Keyboard/Info.plist
       CODE_SIGN_ENTITLEMENTS: T9Bopomofo/Keyboard/Keyboard.entitlements
       DEVELOPMENT_TEAM: S24Z424MU4
@@ -109,8 +101,8 @@ targets:
       CODE_SIGN_IDENTITY: "Apple Distribution"
       PROVISIONING_PROFILE_SPECIFIER: ""
       SKIP_INSTALL: YES
-      MARKETING_VERSION: "1.0.1"
-      CURRENT_PROJECT_VERSION: "93"
+      MARKETING_VERSION: "1.0.2"
+      CURRENT_PROJECT_VERSION: "94"
     dependencies:
       - sdk: CoreFoundation.framework
       - sdk: Security.framework

@@ -19,9 +19,7 @@ enum FuzzyMatcher {
         var matches: [Match] = []
         let exactSet = Set(lexicon.exact(digits: digits, limit: 1).map(\.t9))  // every hit's t9 == digits
 
-        // The first digit is never mutated (positions start at 1 here and in insertionProbes):
-        // DictionaryLoader shards by first digit and decodes a shard on first touch, so probing
-        // other first digits would force-decode the whole lexicon on the main thread.
+        // The first digit is never mutated (positions start at 1 here and in insertionProbes).
         // 1) Neighbor substitution at one position
         if maxDistance >= 1 {
             for (i, ch) in digits.enumerated() where i > 0 {

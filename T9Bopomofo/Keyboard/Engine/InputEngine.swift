@@ -39,11 +39,8 @@ final class InputEngine: ObservableObject {
         refreshSwiftCandidates()
     }
 
-    /// DictionaryLoader.loadFromBundle() just locates the (sharded) bundle resources —
-    /// it doesn't decode anything yet, so this is cheap enough to call synchronously here.
-    /// Actual dictionary data loads lazily, one T9-first-digit shard at a time, the first
-    /// time a query touches it (see DictionaryLoader.ensureShardLoaded) — no more background
-    /// queue, no more "not loaded yet" state to gate reads against.
+    /// DictionaryLoader.loadFromBundle() just memory-maps lexicon.bin — nothing is decoded
+    /// until a query reads a bucket — so this is cheap enough to call synchronously here.
     func prepare(bundle: Bundle = .main) {
         if (try? lexicon.loadFromBundle(bundle: bundle)) == nil {
             let fm = FileManager.default

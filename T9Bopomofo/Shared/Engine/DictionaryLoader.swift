@@ -1,36 +1,13 @@
 import Foundation
 
 final class DictionaryLoader: @unchecked Sendable {
-    /// One T9 first-digit's entries, weight-descending, plus full T9 string → indices for O(1)
-    /// exact() lookups. Self-contained so a shard decoded off the main thread is merged in with
-    /// a single assignment.
-    private struct Shard {
-        let entries: [LexiconEntry]
-        let index: [String: [Int]]
+    /// Eager path (YAML at build time / dev fallback): full T9 string → entries, weight-descending.
+    private var memory: [String: [LexiconEntry]] = [:]
+    /// Bundle path: lexicon.bin memory-mapped, nothing decoded until a query hits a bucket.
+    private var mapped: MappedLexicon?
 
-        init(_ entries: [LexiconEntry]) {
-            // Weight-descending order = every index bucket is already sorted by weight (see exact()).
-            self.entries = entries.sorted { $0.weight > $1.weight }
-            var index: [String: [Int]] = [:]
-            for (i, e) in self.entries.enumerated() {
-                index[e.t9, default: []].append(i)
-            }
-            self.index = index
-        }
-    }
-
-    /// Main thread only; the background preload hands shards back via the main queue.
-    private var shards: [Character: Shard] = [:]
-
-    /// All loaded entries (build scripts read this after the eager `load(from:)`).
-    var entries: [LexiconEntry] { shards.values.flatMap(\.entries) }
-
-    /// T9 keys, one shard per first digit — matches Scripts/generate_lexicon_main.swift's
-    /// sharding and T9KeyMap's key alphabet.
-    static let shardKeys: [Character] = Array("0123456789v")
-
-    /// Set once a sharded bundle is found; nil means we're in the eager YAML/dev path below.
-    private var shardBundle: Bundle?
+    /// All entries of the eager load (the build-time generator reads this).
+    var entries: [LexiconEntry] { memory.values.flatMap { $0 } }
 
     func load(from urls: [URL]) throws {
         var all: [LexiconEntry] = []
@@ -48,37 +25,30 @@ final class DictionaryLoader: @unchecked Sendable {
                 best[key] = e
             }
         }
-        shards = Dictionary(grouping: best.values) { $0.t9.first ?? " " }.mapValues(Shard.init)
+        memory = Dictionary(grouping: best.values, by: \.t9).mapValues(MappedLexicon.bucketOrder)
     }
 
-    /// Build-time (Scripts/generate_lexicon_main.swift) shards the dictionary into one
-    /// binary-plist file per T9 first-digit (lexicon-0.bin … lexicon-9.bin, lexicon-v.bin).
-    /// At runtime we don't decode ANY of them up front — decoding all ~160k entries turned
-    /// out to cost 1.5-2s regardless of source format (YAML text or Codable/plist), and that
-    /// was the real cause of the "first keystroke takes ~1s" complaint, not rebuildIndex().
-    /// Instead we remember the bundle and decode shards one at a time on a background queue
-    /// (`preloadShards`). A query that reaches a shard before the preload does decodes it
-    /// synchronously (`ensureShardLoaded`), which was the "random" lag: ~150ms on the first
-    /// word starting with each key, again every time iOS relaunched the keyboard.
-    /// ponytail: preloading holds the whole lexicon in memory (normal typing touched most shards
-    /// anyway); if the extension hits its memory limit, preload only the common first keys.
+    /// Maps a lexicon.bin written by Scripts/generate_lexicon_main.swift. False if missing or invalid.
+    func load(mappedURL url: URL) -> Bool {
+        mapped = MappedLexicon(url: url)
+        return mapped != nil
+    }
+
+    /// The old plist shards had to be decoded into ~160k structs before a query could use them
+    /// (~150ms per shard on the main thread, again every time iOS relaunched the keyboard — which
+    /// big host apps like Line/IG make iOS do often). lexicon.bin is memory-mapped instead: opening
+    /// it is instant, and its pages are clean file-backed memory iOS can drop and re-read rather
+    /// than counting it against the extension.
     func loadFromBundle(bundle: Bundle = .main) throws {
-        if Self.resourceURL(bundle: bundle, name: "lexicon-0", ext: "bin") != nil {
-            shardBundle = bundle
-            preloadShards(bundle: bundle)
+        if let url = Self.resourceURL(bundle: bundle, name: "lexicon", ext: "bin"), load(mappedURL: url) {
             return
         }
 
-        // Dev/fallback path: no sharded bundle found, parse the YAML directly (eager).
+        // Dev/fallback path: no valid lexicon.bin, parse the YAML directly (eager).
         var urls: [URL] = []
-        let names = ["taiwan_phrases.dict", "chewing_base.dict"]
-        let subdirs: [String?] = ["chewing", nil]
-        for name in names {
-            for sub in subdirs {
-                if let url = bundle.url(forResource: name, withExtension: "yaml", subdirectory: sub) {
-                    urls.append(url)
-                    break
-                }
+        for name in ["taiwan_phrases.dict", "chewing_base.dict"] {
+            if let url = Self.resourceURL(bundle: bundle, name: name, ext: "yaml") {
+                urls.append(url)
             }
         }
         guard !urls.isEmpty else {
@@ -99,33 +69,6 @@ final class DictionaryLoader: @unchecked Sendable {
         return nil
     }
 
-    private static func decodeShard(_ key: Character, bundle: Bundle) -> Shard {
-        guard let url = resourceURL(bundle: bundle, name: "lexicon-\(key)", ext: "bin"),
-              let data = try? Data(contentsOf: url),
-              let entries = try? PropertyListDecoder().decode([LexiconEntry].self, from: data)
-        else { return Shard([]) }  // empty, so a missing shard isn't retried every keystroke
-        return Shard(entries)
-    }
-
-    private func preloadShards(bundle: Bundle) {
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            for key in Self.shardKeys {
-                let shard = Self.decodeShard(key, bundle: bundle)
-                DispatchQueue.main.async {
-                    guard let self, self.shards[key] == nil else { return }
-                    self.shards[key] = shard
-                }
-            }
-        }
-    }
-
-    /// Decodes the shard `key` belongs to now if the background preload hasn't delivered it yet.
-    /// No-op in the eager (non-sharded) path, where everything is already loaded.
-    private func ensureShardLoaded(_ key: Character) {
-        guard let bundle = shardBundle, shards[key] == nil else { return }
-        shards[key] = Self.decodeShard(key, bundle: bundle)
-    }
-
     /// All lexicon hits whose T9 exactly equals a prefix of `digits` (Rime partial spans).
     ///
     /// Does NOT truncate per-span hits: many zhuyin symbols share a T9 key (e.g. ㄔㄘㄣㄧ
@@ -136,8 +79,7 @@ final class DictionaryLoader: @unchecked Sendable {
     /// selection look like it does nothing, since the correct tone's candidate was already
     /// cut. The real cutoff (`candidateLimit`) is applied later, after tone scoring.
     func prefixSpans(of digits: String, maxSpan: Int = 12) -> [(span: String, entries: [LexiconEntry])] {
-        guard let first = digits.first else { return [] }
-        ensureShardLoaded(first)
+        guard !digits.isEmpty else { return [] }
         var result: [(String, [LexiconEntry])] = []
         let upper = min(maxSpan, digits.count)
         for len in 1...upper {
@@ -152,10 +94,8 @@ final class DictionaryLoader: @unchecked Sendable {
 
     /// `limit`: only the top hits by weight, without copying the whole bucket first.
     func exact(digits: String, limit: Int = .max) -> [LexiconEntry] {
-        guard let first = digits.first else { return [] }
-        ensureShardLoaded(first)
-        guard let shard = shards[first], let idxs = shard.index[digits] else { return [] }
-        return idxs.prefix(limit).map { shard.entries[$0] }  // buckets are built weight-descending
+        if let mapped { return mapped.lookup(digits, limit: limit) }
+        return Array((memory[digits] ?? []).prefix(limit))  // buckets are weight-descending
     }
 
     // MARK: - Parse
@@ -203,5 +143,126 @@ final class DictionaryLoader: @unchecked Sendable {
         if let v = Int(t) { return v }
         if let v = Double(t) { return Int(v) }
         return 1000
+    }
+}
+
+/// lexicon.bin, little-endian, every field a 4-byte word:
+///   header   "T9LX", version, keyCount, entryCount
+///   keys     keyCount × (t9Off, t9Len, firstEntry, entryCount), sorted by t9 bytes
+///   entries  entryCount × (wordOff, wordLen, readingOff, readingLen, tonesOff, tonesLen,
+///            sylOff, sylLen, weight as Int32), each key's run weight-descending
+///   strings  UTF-8 blob; offsets above are relative to its start
+/// Written by `MappedLexicon.encode` at build time (Scripts/generate_lexicon_main.swift).
+struct MappedLexicon {
+    static let magic: UInt32 = 0x584C_3954  // "T9LX"
+    static let version: UInt32 = 1
+    private static let headerSize = 16, keySize = 16, entrySize = 36
+
+    private let data: Data
+    private let keyCount: Int
+    private let entriesStart: Int
+    private let stringsStart: Int
+
+    init?(url: URL) {
+        guard let data = try? Data(contentsOf: url, options: .alwaysMapped),
+              data.count >= Self.headerSize else { return nil }
+        let (magic, version, keys, entries) = data.withUnsafeBytes { p in
+            (Self.word(p, 0), Self.word(p, 4), Int(Self.word(p, 8)), Int(Self.word(p, 12)))
+        }
+        let entriesStart = Self.headerSize + keys * Self.keySize
+        let stringsStart = entriesStart + entries * Self.entrySize
+        guard magic == Self.magic, version == Self.version, stringsStart <= data.count else { return nil }
+        self.data = data
+        self.keyCount = keys
+        self.entriesStart = entriesStart
+        self.stringsStart = stringsStart
+    }
+
+    /// Weight-descending; ties by word then reading so the file is deterministic.
+    static func bucketOrder(_ entries: [LexiconEntry]) -> [LexiconEntry] {
+        entries.sorted {
+            if $0.weight != $1.weight { return $0.weight > $1.weight }
+            return ($0.word, $0.reading) < ($1.word, $1.reading)
+        }
+    }
+
+    func lookup(_ digits: String, limit: Int) -> [LexiconEntry] {
+        let query = Array(digits.utf8)
+        return data.withUnsafeBytes { p in
+            var lo = 0, hi = keyCount
+            while lo < hi {
+                let mid = (lo + hi) / 2
+                let k = Self.headerSize + mid * Self.keySize
+                let key = string(p, Self.word(p, k), Self.word(p, k + 4))
+                if key.elementsEqual(query) {
+                    let first = Int(Self.word(p, k + 8))
+                    let count = min(Int(Self.word(p, k + 12)), limit)
+                    return (first..<first + count).map { entry(p, $0, t9: digits) }
+                }
+                if key.lexicographicallyPrecedes(query) { lo = mid + 1 } else { hi = mid }
+            }
+            return []
+        }
+    }
+
+    private func entry(_ p: UnsafeRawBufferPointer, _ i: Int, t9: String) -> LexiconEntry {
+        let e = entriesStart + i * Self.entrySize
+        func text(_ field: Int) -> String {
+            String(decoding: string(p, Self.word(p, e + field * 8), Self.word(p, e + field * 8 + 4)), as: UTF8.self)
+        }
+        return LexiconEntry(word: text(0), reading: text(1), t9: t9, tones: text(2), syllableLengths: text(3),
+                            weight: Int(Int32(bitPattern: Self.word(p, e + 32))))
+    }
+
+    private func string(_ p: UnsafeRawBufferPointer, _ off: UInt32, _ len: UInt32) -> UnsafeRawBufferPointer {
+        let start = stringsStart + Int(off)
+        return UnsafeRawBufferPointer(rebasing: p[start..<start + Int(len)])
+    }
+
+    private static func word(_ p: UnsafeRawBufferPointer, _ off: Int) -> UInt32 {
+        UInt32(littleEndian: p.loadUnaligned(fromByteOffset: off, as: UInt32.self))
+    }
+
+    /// Build time only: `buckets` maps each full T9 string to its entries.
+    static func encode(_ buckets: [String: [LexiconEntry]]) -> Data {
+        let keys = buckets.keys.sorted { Array($0.utf8).lexicographicallyPrecedes(Array($1.utf8)) }
+        var keyTable = Data(), entryTable = Data(), strings = Data()
+        var interned: [String: UInt32] = [:]
+        func put(_ v: UInt32, _ out: inout Data) {
+            withUnsafeBytes(of: v.littleEndian) { out.append(contentsOf: $0) }
+        }
+        func putString(_ s: String, _ out: inout Data) {
+            let off: UInt32
+            if let o = interned[s] {
+                off = o
+            } else {
+                off = UInt32(strings.count)
+                strings.append(contentsOf: Array(s.utf8))
+                interned[s] = off
+            }
+            put(off, &out)
+            put(UInt32(s.utf8.count), &out)
+        }
+        var entryCount = 0
+        for key in keys {
+            let bucket = bucketOrder(buckets[key]!)
+            putString(key, &keyTable)
+            put(UInt32(entryCount), &keyTable)
+            put(UInt32(bucket.count), &keyTable)
+            for e in bucket {
+                putString(e.word, &entryTable)
+                putString(e.reading, &entryTable)
+                putString(e.tones, &entryTable)
+                putString(e.syllableLengths, &entryTable)
+                put(UInt32(bitPattern: Int32(e.weight)), &entryTable)
+            }
+            entryCount += bucket.count
+        }
+        var out = Data()
+        put(magic, &out)
+        put(version, &out)
+        put(UInt32(keys.count), &out)
+        put(UInt32(entryCount), &out)
+        return out + keyTable + entryTable + strings
     }
 }

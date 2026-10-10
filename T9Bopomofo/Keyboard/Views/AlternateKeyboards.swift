@@ -174,7 +174,7 @@ final class EnglishKeyboardView: UIView {
         let traits = traitCollection
         let style: KeyboardChrome.KeyFillStyle = isAction ? .action : (isFunction ? .function : .zhuyin)
         b.setTitleColor(KeyboardChrome.keyTitle(for: traits, style: style), for: .normal)
-        b.titleLabel?.font = .systemFont(ofSize: title == "space" || title == "return" ? 14 : 18, weight: .medium)
+        b.titleLabel?.font = .systemFont(ofSize: title == "space" || title == "return" ? 16 : (isFunction ? 18 : 24), weight: .medium)
         b.backgroundColor = KeyboardChrome.keyFill(for: traits, style: style)
         b.layer.cornerRadius = 7
         KeyboardChrome.applyKeyShadow(b.layer)
@@ -351,6 +351,7 @@ final class SymbolKeyboardView: UIView {
         b.setTitle(title, for: .normal)
         let style: KeyboardChrome.KeyFillStyle = isFunction ? .function : .zhuyin
         b.setTitleColor(KeyboardChrome.keyTitle(for: traitCollection, style: style), for: .normal)
+        b.titleLabel?.font = .systemFont(ofSize: isFunction ? 18 : 24, weight: .medium)
         b.backgroundColor = KeyboardChrome.keyFill(for: traitCollection, style: style)
         b.layer.cornerRadius = 7
         KeyboardChrome.applyKeyShadow(b.layer)
