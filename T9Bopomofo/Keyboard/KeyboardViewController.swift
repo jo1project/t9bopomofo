@@ -211,7 +211,7 @@ final class KeyboardViewController: UIInputViewController {
     private func expandCandidates() {
         candidatesExpanded = true
         candidateBar.setExpanded(true)
-        engine.setCandidateLimit(64)
+        engine.setCandidateLimit(1000)
         reloadCandidates()
 
         candidatePanel?.removeFromSuperview()

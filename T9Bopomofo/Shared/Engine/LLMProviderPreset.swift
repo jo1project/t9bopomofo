@@ -65,7 +65,7 @@ enum LLMProviderPreset: String, CaseIterable, Identifiable {
         case .deepseek: return "deepseek-chat"
         case .together: return "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo"
         case .xai: return "grok-3-mini"
-        case .gemini: return "gemini-2.0-flash"
+        case .gemini: return "gemini-3.6-flash"
         case .mistral: return "mistral-small-latest"
         case .custom: return nil
         }
