@@ -22,7 +22,7 @@ final class InputEngine: ObservableObject {
     /// ㄉ/ㄚ on key 1). Candidates that read differently at that position are dropped.
     private var exactTokens: [Int: Character] = [:]
     /// The bar's 12. It started at 40, but every commit's collapse reset it to 12; the expanded
-    /// panel raises it to 64 so rare chars still appear there.
+    /// panel raises it to 1000 so rare chars still appear there.
     private var candidateLimit = 12
     private var llmTask: Task<Void, Never>?
     private var lastPredictionContext: String = ""
