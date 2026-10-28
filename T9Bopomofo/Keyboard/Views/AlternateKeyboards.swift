@@ -181,7 +181,11 @@ final class EnglishKeyboardView: UIView {
         if addTap, let action {
             b.addAction(UIAction { _ in
                 KeyboardHaptics.keyTap()
-                KeyboardSounds.keyTap()
+                if isFunction && !isAction {
+                    KeyboardSounds.modifier()
+                } else {
+                    KeyboardSounds.keyTap()
+                }
                 action()
             }, for: .touchUpInside)
         }
@@ -194,12 +198,15 @@ final class EnglishKeyboardView: UIView {
         }
         let box = TimerBox()
         button.addAction(UIAction { _ in
+            KeyboardHaptics.delete()
             KeyboardSounds.delete()
             handler()
             box.timer?.invalidate()
             let delay = Timer(timeInterval: 0.4, repeats: false) { _ in
                 box.timer?.invalidate()
                 let fast = Timer(timeInterval: 0.07, repeats: true) { _ in
+                    KeyboardHaptics.delete()
+                    KeyboardSounds.delete()
                     handler()
                 }
                 RunLoop.main.add(fast, forMode: .common)
@@ -294,7 +301,7 @@ final class SymbolKeyboardView: UIView {
         let toggle = makeKey(toggleTitle, isFunction: true) { [weak self] in self?.togglePage() }
         toggleButtons.append(toggle)
         bottomRow.addArrangedSubview(toggle)
-        bottomRow.addArrangedSubview(makeKey("⌫", isFunction: true) { [weak self] in self?.onBackspace?() })
+        bottomRow.addArrangedSubview(makeDeleteKey())
         digitsStack.addArrangedSubview(bottomRow)
     }
 
@@ -325,8 +332,49 @@ final class SymbolKeyboardView: UIView {
         row.addArrangedSubview(toggle)
         row.addArrangedSubview(makeKey("。") { [weak self] in self?.onInsert?("。") })
         row.addArrangedSubview(makeKey("，") { [weak self] in self?.onInsert?("，") })
-        row.addArrangedSubview(makeKey("⌫", isFunction: true) { [weak self] in self?.onBackspace?() })
+        row.addArrangedSubview(makeDeleteKey())
         return row
+    }
+
+    private func makeDeleteKey() -> UIButton {
+        let b = UIButton(type: .system)
+        b.setTitle("⌫", for: .normal)
+        b.setTitleColor(KeyboardChrome.keyTitle(for: traitCollection, style: .function), for: .normal)
+        b.titleLabel?.font = .systemFont(ofSize: 18, weight: .medium)
+        b.backgroundColor = KeyboardChrome.keyFill(for: traitCollection, style: .function)
+        b.layer.cornerRadius = 7
+        KeyboardChrome.applyKeyShadow(b.layer)
+
+        final class TimerBox {
+            var timer: Timer?
+        }
+        let box = TimerBox()
+        b.addAction(UIAction { [weak self] _ in
+            KeyboardHaptics.delete()
+            KeyboardSounds.delete()
+            self?.onBackspace?()
+            box.timer?.invalidate()
+            let delay = Timer(timeInterval: 0.4, repeats: false) { [weak self] _ in
+                box.timer?.invalidate()
+                let fast = Timer(timeInterval: 0.07, repeats: true) { [weak self] _ in
+                    KeyboardHaptics.delete()
+                    KeyboardSounds.delete()
+                    self?.onBackspace?()
+                }
+                RunLoop.main.add(fast, forMode: .common)
+                box.timer = fast
+            }
+            RunLoop.main.add(delay, forMode: .common)
+            box.timer = delay
+        }, for: .touchDown)
+        let stop = UIAction { _ in
+            box.timer?.invalidate()
+            box.timer = nil
+        }
+        b.addAction(stop, for: .touchUpInside)
+        b.addAction(stop, for: .touchUpOutside)
+        b.addAction(stop, for: .touchCancel)
+        return b
     }
 
     private var toggleTitle: String {
@@ -357,7 +405,11 @@ final class SymbolKeyboardView: UIView {
         KeyboardChrome.applyKeyShadow(b.layer)
         b.addAction(UIAction { _ in
             KeyboardHaptics.keyTap()
-            KeyboardSounds.keyTap()
+            if isFunction {
+                KeyboardSounds.modifier()
+            } else {
+                KeyboardSounds.keyTap()
+            }
             action()
         }, for: .touchUpInside)
         return b
@@ -418,7 +470,11 @@ final class EmojiKeyboardView: UIView {
         back.backgroundColor = KeyboardChrome.keyFill(for: traitCollection, style: .function)
         back.layer.cornerRadius = 7
         KeyboardChrome.applyKeyShadow(back.layer)
-        back.addAction(UIAction { [weak self] _ in self?.onMode?(.zhuyin) }, for: .touchUpInside)
+        back.addAction(UIAction { [weak self] _ in
+            KeyboardHaptics.keyTap()
+            KeyboardSounds.modifier()
+            self?.onMode?(.zhuyin)
+        }, for: .touchUpInside)
 
         let en = UIButton(type: .system)
         en.setTitle("EN", for: .normal)
@@ -427,7 +483,11 @@ final class EmojiKeyboardView: UIView {
         en.backgroundColor = KeyboardChrome.keyFill(for: traitCollection, style: .function)
         en.layer.cornerRadius = 7
         KeyboardChrome.applyKeyShadow(en.layer)
-        en.addAction(UIAction { [weak self] _ in self?.onMode?(.english) }, for: .touchUpInside)
+        en.addAction(UIAction { [weak self] _ in
+            KeyboardHaptics.keyTap()
+            KeyboardSounds.modifier()
+            self?.onMode?(.english)
+        }, for: .touchUpInside)
 
         bottom.addArrangedSubview(back)
         bottom.addArrangedSubview(en)
@@ -454,7 +514,11 @@ final class EmojiKeyboardView: UIView {
                 let b = UIButton(type: .system)
                 b.setTitle(e, for: .normal)
                 b.titleLabel?.font = .systemFont(ofSize: 26)
-                b.addAction(UIAction { [weak self] _ in self?.onInsert?(e) }, for: .touchUpInside)
+                b.addAction(UIAction { [weak self] _ in
+                    KeyboardHaptics.keyTap()
+                    KeyboardSounds.keyTap()
+                    self?.onInsert?(e)
+                }, for: .touchUpInside)
                 row.addArrangedSubview(b)
             }
             while row.arrangedSubviews.count < cols {
