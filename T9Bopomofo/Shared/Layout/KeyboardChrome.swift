@@ -2,23 +2,37 @@ import UIKit
 import AudioToolbox
 
 enum KeyboardHaptics {
-    private static let light = UIImpactFeedbackGenerator(style: .light)
+    private static let rigid = UIImpactFeedbackGenerator(style: .rigid)
     private static let medium = UIImpactFeedbackGenerator(style: .medium)
     private static let select = UISelectionFeedbackGenerator()
 
+    static func prepare() {
+        guard AppSettings.shared.hapticsEnabled else { return }
+        rigid.prepare()
+    }
+
     static func keyTap() {
         guard AppSettings.shared.hapticsEnabled else { return }
-        light.impactOccurred(intensity: 0.7)
+        rigid.impactOccurred(intensity: 1.0)
+        rigid.prepare()
+    }
+
+    static func delete() {
+        guard AppSettings.shared.hapticsEnabled else { return }
+        rigid.impactOccurred(intensity: 0.85)
+        rigid.prepare()
     }
 
     static func calloutTick() {
         guard AppSettings.shared.hapticsEnabled else { return }
         select.selectionChanged()
+        select.prepare()
     }
 
     static func commit() {
         guard AppSettings.shared.hapticsEnabled else { return }
-        medium.impactOccurred(intensity: 0.85)
+        medium.impactOccurred(intensity: 1.0)
+        medium.prepare()
     }
 }
 
@@ -31,6 +45,11 @@ enum KeyboardSounds {
     static func delete() {
         guard AppSettings.shared.soundsEnabled else { return }
         AudioServicesPlaySystemSound(1155)
+    }
+
+    static func modifier() {
+        guard AppSettings.shared.soundsEnabled else { return }
+        AudioServicesPlaySystemSound(1156)
     }
 
     static func commit() {

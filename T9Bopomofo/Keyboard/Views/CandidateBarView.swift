@@ -41,6 +41,8 @@ final class CandidateBarView: UIView {
         expandButton.titleLabel?.font = .systemFont(ofSize: 14, weight: .semibold)
         expandButton.translatesAutoresizingMaskIntoConstraints = false
         expandButton.addAction(UIAction { [weak self] _ in
+            KeyboardHaptics.keyTap()
+            KeyboardSounds.modifier()
             self?.onToggleExpand?()
         }, for: .touchUpInside)
 
@@ -49,6 +51,8 @@ final class CandidateBarView: UIView {
         dismissButton.translatesAutoresizingMaskIntoConstraints = false
         dismissButton.accessibilityLabel = "隱藏鍵盤"
         dismissButton.addAction(UIAction { [weak self] _ in
+            KeyboardHaptics.keyTap()
+            KeyboardSounds.modifier()
             self?.onDismissKeyboard?()
         }, for: .touchUpInside)
 
@@ -215,6 +219,8 @@ final class CandidateBarView: UIView {
 
     @objc private func tap(_ sender: UIButton) {
         if let c = objc_getAssociatedObject(sender, &Assoc.candidate) as? Candidate {
+            KeyboardHaptics.commit()
+            KeyboardSounds.commit()
             onSelect?(c)
         }
     }
@@ -230,15 +236,22 @@ private final class PillButton: UIButton {
 }
 
 /// Full panel of candidates (grid) shown when bar is expanded.
+/// Uses manual frame layout + a reusable button pool inside `UIScrollView` instead of
+/// tearing down / rebuilding nested `UIStackView`s and Auto Layout constraints inside `layoutSubviews()`,
+/// preventing Auto Layout recursion crashes and Jetsam OOM kills when hundreds of candidates are shown.
 final class CandidatePanelView: UIView {
     var onSelect: ((Candidate) -> Void)?
     var onClose: (() -> Void)?
 
     private let scroll = UIScrollView()
-    private let stack = UIStackView()
     private var items: [Candidate] = []
+    private var pillPool: [UIButton] = []
     /// Width the rows were last packed for; -1 forces a repack on the next layout pass.
     private var packedWidth: CGFloat = -1
+
+    private static let fontRegular = UIFont.systemFont(ofSize: 20, weight: .regular)
+    private static let fontTop = UIFont.systemFont(ofSize: 20, weight: .semibold)
+    private static let fontLLM = UIFont.systemFont(ofSize: 18, weight: .semibold)
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -246,29 +259,26 @@ final class CandidatePanelView: UIView {
         layer.cornerRadius = 10
 
         scroll.translatesAutoresizingMaskIntoConstraints = false
+        scroll.alwaysBounceVertical = true
+        scroll.showsVerticalScrollIndicator = true
         addSubview(scroll)
-
-        stack.axis = .vertical
-        stack.spacing = 8
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        scroll.addSubview(stack)
 
         NSLayoutConstraint.activate([
             scroll.topAnchor.constraint(equalTo: topAnchor, constant: 8),
             scroll.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
             scroll.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
             scroll.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8),
-            stack.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor),
-            stack.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor),
-            stack.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor),
-            stack.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor),
         ])
     }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
         applyChrome()
+        for (idx, c) in items.enumerated() where idx < pillPool.count {
+            let btn = pillPool[idx]
+            CandidateBarView.configurePill(btn, c, isTop: idx == 0, traits: traitCollection)
+            btn.layer.cornerRadius = 8
+        }
     }
 
     private func applyChrome() {
@@ -281,11 +291,10 @@ final class CandidatePanelView: UIView {
     func setCandidates(_ items: [Candidate]) {
         self.items = items
         packedWidth = -1
+        scroll.setContentOffset(.zero, animated: false)
         setNeedsLayout()
     }
 
-    /// Rows are packed by each pill's natural width, so they need the real width; the panel is
-    /// filled right after it is created, before it has one.
     override func layoutSubviews() {
         super.layoutSubviews()
         let width = scroll.bounds.width
@@ -294,45 +303,67 @@ final class CandidatePanelView: UIView {
         packRows(width: width)
     }
 
-    /// Wrapping rows instead of a fixed 6-column grid: equal columns left ~1 character of room,
-    /// so multi-character candidates showed as "…". Single chars keep the old cell width.
+    /// Wrapping rows using direct frame assignment + button pooling.
     private func packRows(width: CGFloat) {
-        stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        let spacing: CGFloat = 6
+        let hSpacing: CGFloat = 6
+        let vSpacing: CGFloat = 8
+        let cellH: CGFloat = 44
         let cols: CGFloat = 6
-        let avail = width - spacing  // the trailing spacer (finishRow) takes one gap too
-        let minCell = floor((avail - spacing * (cols - 1)) / cols)
-        var row: UIStackView?
-        var used: CGFloat = 0
+        let avail = max(44, width)
+        let minCell = floor((avail - hSpacing * (cols - 1)) / cols)
+
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+
         for (idx, c) in items.enumerated() {
-            let btn = CandidateBarView.makePillButton(c, isTop: idx == 0, traits: traitCollection)
-            btn.layer.cornerRadius = 8 // grid cells stay rounded rects, not pills
-            btn.addAction(UIAction { [weak self] _ in self?.onSelect?(c) }, for: .touchUpInside)
-            let w = min(avail, max(minCell, ceil(btn.intrinsicContentSize.width)))
-            if row == nil || used + spacing + w > avail {
-                if let row { Self.finishRow(row) }
-                let r = UIStackView()
-                r.axis = .horizontal
-                r.spacing = spacing
-                stack.addArrangedSubview(r)
-                row = r
-                used = -spacing
+            let btn: UIButton
+            if idx < pillPool.count {
+                btn = pillPool[idx]
+            } else {
+                btn = PillButton(type: .system)
+                btn.addTarget(self, action: #selector(tap(_:)), for: .touchUpInside)
+                pillPool.append(btn)
+                scroll.addSubview(btn)
             }
-            NSLayoutConstraint.activate([
-                btn.heightAnchor.constraint(equalToConstant: 44),
-                btn.widthAnchor.constraint(equalToConstant: w),
-            ])
-            row?.addArrangedSubview(btn)
-            used += spacing + w
+            CandidateBarView.configurePill(btn, c, isTop: idx == 0, traits: traitCollection)
+            btn.layer.cornerRadius = 8 // grid cells stay rounded rects, not pills
+            if btn.isHidden { btn.isHidden = false }
+            objc_setAssociatedObject(btn, &Assoc.candidate, c, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+
+            let title: String
+            let font: UIFont
+            if c.source == .llm {
+                title = "✦ \(c.text)"
+                font = Self.fontLLM
+            } else {
+                title = c.text
+                font = idx == 0 ? Self.fontTop : Self.fontRegular
+            }
+            let textW = (title as NSString).size(withAttributes: [.font: font]).width
+            let w = min(avail, max(minCell, ceil(textW + 28))) // left 14 + right 14 padding
+
+            if x > 0 && x + w > avail {
+                x = 0
+                y += cellH + vSpacing
+            }
+            btn.frame = CGRect(x: x, y: y, width: w, height: cellH)
+            x += w + hSpacing
         }
-        if let row { Self.finishRow(row) }
+
+        for btn in pillPool.dropFirst(items.count) where !btn.isHidden {
+            btn.isHidden = true
+        }
+
+        let totalHeight = items.isEmpty ? 0 : (y + cellH)
+        scroll.contentSize = CGSize(width: width, height: totalHeight)
     }
 
-    /// Trailing spacer soaks up the leftover width so pills keep their own size.
-    private static func finishRow(_ row: UIStackView) {
-        let spacer = UIView()
-        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        row.addArrangedSubview(spacer)
+    @objc private func tap(_ sender: UIButton) {
+        if let c = objc_getAssociatedObject(sender, &Assoc.candidate) as? Candidate {
+            KeyboardHaptics.commit()
+            KeyboardSounds.commit()
+            onSelect?(c)
+        }
     }
 }
 private enum Assoc {

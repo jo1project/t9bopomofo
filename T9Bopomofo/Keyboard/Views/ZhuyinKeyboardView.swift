@@ -315,6 +315,7 @@ final class KeyButton: UIButton {
         case .began:
             guard !onLongPressCallout.isEmpty else { return }
             calloutActive = true
+            KeyboardHaptics.calloutTick()
             onCalloutBegin?(onLongPressCallout)
             // Seed relative origin immediately.
             onCalloutMove?(windowPoint)
@@ -340,6 +341,7 @@ final class KeyButton: UIButton {
 
     @objc private func touchDownRepeat() {
         guard let handler = repeatHandler else { return }
+        KeyboardHaptics.delete()
         KeyboardSounds.delete()
         handler()
         repeatTimer?.invalidate()
@@ -347,6 +349,8 @@ final class KeyButton: UIButton {
             guard let self else { return }
             self.repeatTimer?.invalidate()
             let fast = Timer(timeInterval: 0.07, repeats: true) { [weak self] _ in
+                KeyboardHaptics.delete()
+                KeyboardSounds.delete()
                 self?.repeatHandler?()
             }
             RunLoop.main.add(fast, forMode: .common)

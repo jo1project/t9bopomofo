@@ -15,7 +15,7 @@ final class KeyboardViewController: UIInputViewController {
     private let keyboardContainer = UIView()
     private var heightConstraint: NSLayoutConstraint?
     private var candidateBarHeight: NSLayoutConstraint?
-    private weak var candidatePanel: CandidatePanelView?
+    private var candidatePanel: CandidatePanelView?
     private var candidatesExpanded = false
 
     // Cached keyboard views for reuse
@@ -109,6 +109,7 @@ final class KeyboardViewController: UIInputViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         AppSettings.shared.reloadFromDisk()
+        KeyboardHaptics.prepare()
         if mode == .english {
             refreshEnglishSuggestions()
         } else if !engine.isComposing {
@@ -164,12 +165,17 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func reloadCandidates() {
+        // Keep the top horizontal bar capped at 12 pills even when the engine holds up to 240
+        // candidates for the expanded panel, preventing huge horizontal stack allocations.
+        let barItems = candidatesExpanded ? Array(engine.candidates.prefix(12)) : engine.candidates
         candidateBar.setCandidates(
-            engine.candidates,
+            barItems,
             preedit: engine.preeditDisplay,
             status: engine.isComposing ? "" : engine.predictionStatus
         )
-        candidatePanel?.setCandidates(engine.candidates)
+        if candidatesExpanded {
+            candidatePanel?.setCandidates(engine.candidates)
+        }
     }
 
     /// After committing text, ask LLM using document tail (not only the last word).
@@ -211,42 +217,52 @@ final class KeyboardViewController: UIInputViewController {
     private func expandCandidates() {
         candidatesExpanded = true
         candidateBar.setExpanded(true)
-        engine.setCandidateLimit(1000)
-        reloadCandidates()
 
-        candidatePanel?.removeFromSuperview()
-        let panel = CandidatePanelView()
-        panel.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(panel)
-        NSLayoutConstraint.activate([
-            panel.topAnchor.constraint(equalTo: candidateBar.bottomAnchor, constant: 2),
-            panel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 4),
-            panel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -4),
-            panel.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -4),
-        ])
-        panel.onSelect = { [weak self] candidate in
-            guard let self else { return }
-            let text = self.engine.selectCandidate(candidate)
-            self.textDocumentProxy.insertText(text)
-            self.collapseCandidates()
-            self.refreshPredictionsAfterCommit(inserted: text)
+        let panel: CandidatePanelView
+        if let existing = candidatePanel {
+            panel = existing
+        } else {
+            let p = CandidatePanelView()
+            p.translatesAutoresizingMaskIntoConstraints = false
+            view.addSubview(p)
+            NSLayoutConstraint.activate([
+                p.topAnchor.constraint(equalTo: candidateBar.bottomAnchor, constant: 2),
+                p.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 4),
+                p.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -4),
+                p.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -4),
+            ])
+            p.onSelect = { [weak self] candidate in
+                guard let self else { return }
+                let text = self.engine.selectCandidate(candidate)
+                self.textDocumentProxy.insertText(text)
+                self.collapseCandidates()
+                self.refreshPredictionsAfterCommit(inserted: text)
+            }
+            candidatePanel = p
+            panel = p
         }
-        panel.setCandidates(engine.candidates)
-        candidatePanel = panel
+
+        panel.isHidden = false
         keyboardContainer.isHidden = true
         heightConstraint?.constant = expandedHeight
+        // setCandidateLimit triggers engine.onCandidatesChanged -> reloadCandidates(),
+        // which updates both candidateBar (top 12) and candidatePanel (up to 240).
+        engine.setCandidateLimit(240)
     }
 
     private func collapseCandidates() {
-        // Called on every commit; only a real collapse needs the candidates recomputed at 12.
-        if candidatesExpanded { engine.setCandidateLimit(12) }
+        let wasExpanded = candidatesExpanded
         candidatesExpanded = false
         candidateBar.setExpanded(false)
-        candidatePanel?.removeFromSuperview()
-        candidatePanel = nil
+        candidatePanel?.isHidden = true
         keyboardContainer.isHidden = false
         heightConstraint?.constant = collapsedHeight
-        reloadCandidates()
+        // Called on every commit; only a real collapse needs the candidates recomputed at 12.
+        if wasExpanded {
+            engine.setCandidateLimit(12)
+        } else {
+            reloadCandidates()
+        }
     }
 
     private func renderKeyboard() {

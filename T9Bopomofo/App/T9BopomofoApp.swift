@@ -91,15 +91,26 @@ struct KeyboardSettingsView: View {
                     Text("輸入")
                 }
 
-                Section("回饋") {
+                Section {
                     Toggle("按鍵音效", isOn: $soundsOn)
                         .onChange(of: soundsOn) { _, v in
                             AppSettings.shared.soundsEnabled = v
+                            if v { KeyboardSounds.keyTap() }
                         }
-                    Toggle("按鍵觸覺回饋", isOn: $hapticsOn)
+                    Toggle("按鍵震動（觸覺回饋）", isOn: $hapticsOn)
                         .onChange(of: hapticsOn) { _, v in
                             AppSettings.shared.hapticsEnabled = v
+                            if v { KeyboardHaptics.keyTap() }
                         }
+                    Button("點我測試音效與震動") {
+                        KeyboardHaptics.keyTap()
+                        KeyboardSounds.keyTap()
+                    }
+                    Text("iOS 第三方鍵盤需開啟「允許完整取用」才能在鍵盤中播放音效與觸覺震動；同時請確認系統「設定 → 聲音與觸覺回饋 → 系統觸覺回饋」已開啟。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                } header: {
+                    Text("回饋")
                 }
 
                 Section("外觀") {
@@ -114,6 +125,7 @@ struct KeyboardSettingsView: View {
                 fuzzyOn = AppSettings.shared.fuzzyNeighborEnabled
                 hapticsOn = AppSettings.shared.hapticsEnabled
                 soundsOn = AppSettings.shared.soundsEnabled
+                KeyboardHaptics.prepare()
             }
         }
     }
