@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Reference tests for T9 encoding / fuzzy / clear-on-symbol (mirrors Swift engine)."""
+"""Reference tests for T9 encoding / fuzzy / clear-on-symbol / continuous-input selection
+(mirrors Swift engine: InputEngine composing-buffer rules + T9SortFilter ranking)."""
 from __future__ import annotations
 
 import sys
@@ -38,6 +39,13 @@ TOKEN_TO_KEY = {
 
 TONE_MARKS = {"ˊ": "w", "ˇ": "x", "ˋ": "y"}
 BOPOMOFO_BLOCK = range(0x3105, 0x3130)
+
+# Mirrors T9KeyMap.keyLabels (preedit chip shows the symbol group of each key).
+KEY_LABELS = {
+    "1": "ㄅㄉㄚ", "2": "ㄍㄐㄞ", "3": "ㄓㄗㄢㄦ", "4": "ㄆㄊㄛ", "5": "ㄎㄑㄟ",
+    "6": "ㄔㄘㄣㄧ", "7": "ㄇㄋㄜ", "8": "ㄏㄒㄠㄡ", "9": "ㄕㄙㄤㄨ", "0": "ㄈㄌㄝ",
+    "v": "ㄖㄥㄩ",
+}
 
 NEIGHBORS = {
     "1": list("24"), "2": list("135"), "3": list("26"),
@@ -105,6 +113,112 @@ def load_all() -> list[tuple[str, str, str, int]]:
     for name in DICT_FILES:
         entries.extend(parse_dict(DICT / name))
     return entries
+
+
+class EngineBufferMirror:
+    """Mirrors InputEngine's composing-buffer rules for continuous-input candidate selection:
+
+    - A partial-span candidate commits only its span (first `coverage` digits) and keeps
+      the unconsumed remainder composing; tone marks pressed at <= coverage digits and
+      exact tokens below the boundary go with the chunk, the rest shift down.
+    - Backspace pops tones, then digits, then un-commits the last partial selection
+      (restoring the digits/tones/tokens it consumed) and reports the text to delete.
+    - A full-coverage selection (or a prediction) commits and clears the whole run.
+    """
+
+    def __init__(self) -> None:
+        self.digits: str = ""
+        self.marks: list[tuple[int, str]] = []  # (digits_at_press, tone)
+        self.tokens: dict[int, str] = {}        # position -> long-pressed zhuyin
+        self.chunks: list[dict] = []            # committed partial selections
+        self.last_committed: str = ""
+        self.run_base: str = ""
+
+    # -- input --
+    def tap_digit(self, d: str) -> None:
+        self.digits += d
+
+    def tap_tone(self, tone: str) -> None:
+        # A second tone press at the same digit count replaces (user changed their mind).
+        if self.marks and self.marks[-1][0] == len(self.digits):
+            self.marks.pop()
+        self.marks.append((len(self.digits), tone))
+
+    def tap_exact(self, zh: str) -> None:
+        key = TOKEN_TO_KEY[zh]
+        self.tokens[len(self.digits)] = zh
+        self.digits += key
+
+    # -- selection --
+    def select(self, text: str, coverage: int = 0, is_prediction: bool = False) -> str:
+        if is_prediction:
+            return self._commit_full(text)
+        if 0 < coverage < len(self.digits):
+            return self._commit_partial(text, coverage)
+        return self._commit_full(text)
+
+    def _commit_full(self, text: str) -> str:
+        self.last_committed = text
+        self._clear()
+        return text
+
+    def _commit_partial(self, text: str, coverage: int) -> str:
+        consumed_marks = [m for m in self.marks if m[0] <= coverage]
+        kept_marks = [(m[0] - coverage, m[1]) for m in self.marks if m[0] > coverage]
+        consumed_tokens = {p: z for p, z in self.tokens.items() if p < coverage}
+        kept_tokens = {p - coverage: z for p, z in self.tokens.items() if p >= coverage}
+        self.chunks.append({
+            "text": text,
+            "digits": self.digits[:coverage],
+            "marks": consumed_marks,
+            "tokens": consumed_tokens,
+        })
+        if len(self.chunks) == 1:
+            self.run_base = self.last_committed
+        self.digits = self.digits[coverage:]
+        self.marks = kept_marks
+        self.tokens = kept_tokens
+        self.last_committed = text
+        return text
+
+    def _clear(self) -> None:
+        self.digits = ""
+        self.marks = []
+        self.tokens = {}
+        self.chunks = []
+        self.run_base = ""
+
+    # -- backspace --
+    def backspace(self) -> str | None:
+        uncommitted: str | None = None
+        if self.marks:
+            self.marks.pop()
+        elif self.digits:
+            self.digits = self.digits[:-1]
+            self.tokens.pop(len(self.digits), None)
+        elif self.chunks:
+            chunk = self.chunks.pop()
+            self.digits = chunk["digits"] + self.digits
+            self.marks = chunk["marks"] + self.marks
+            self.tokens.update(chunk["tokens"])
+            self.last_committed = self.chunks[-1]["text"] if self.chunks else self.run_base
+            if not self.chunks:
+                self.run_base = ""
+            uncommitted = chunk["text"]
+        return uncommitted
+
+    # -- state --
+    def is_composing(self) -> bool:
+        return bool(self.digits or self.marks or self.chunks)
+
+    def preedit(self) -> str:
+        committed = "".join(c["text"] for c in self.chunks)
+        keys = "·".join(self.tokens.get(i, KEY_LABELS.get(d, d)) for i, d in enumerate(self.digits))
+        if not committed:
+            return keys
+        if not keys:
+            return committed
+        return committed + "·" + keys
 
 
 def test_encode_samples():
@@ -586,6 +700,146 @@ def test_span_pretrim_matches_full_sort():
     print("span_pretrim_matches_full_sort OK")
 
 
+def test_partial_commit_keeps_remainder():
+    """Continuous input: selecting a candidate that covers only the first syllable commits
+    it and keeps the unconsumed digits composing — the old engine discarded the whole buffer.
+
+    你(ㄋㄧˇ)="76"x  好(ㄏㄠˇ)="88"x  嗎(ㄇㄚ)="71" — tones pressed after each syllable.
+    """
+    e = EngineBufferMirror()
+    for d in "76":
+        e.tap_digit(d)
+    e.tap_tone("x")  # 你, at 2 digits
+    for d in "88":
+        e.tap_digit(d)
+    e.tap_tone("x")  # 好, at 4 digits
+    for d in "71":
+        e.tap_digit(d)
+    e.tap_tone("q")  # 嗎, at 6 digits
+    assert e.digits == "768871"
+    assert e.marks == [(2, "x"), (4, "x"), (6, "q")]
+
+    assert e.select("你", coverage=2) == "你"
+    assert e.digits == "8871"  # remainder survives
+    assert e.marks == [(2, "x"), (4, "q")]  # 你's tone went with the chunk; the rest shifted by 2
+    assert e.is_composing()
+    assert e.last_committed == "你"
+
+    # finishing the run with a full-coverage candidate clears everything
+    assert e.select("好嗎", coverage=4) == "好嗎"
+    assert e.digits == "" and e.marks == [] and e.chunks == []
+    assert not e.is_composing()
+    print("partial_commit_keeps_remainder OK")
+
+
+def test_partial_commit_shifts_exact_tokens():
+    """Long-pressed exact tokens below the coverage boundary shift down with the remainder."""
+    e = EngineBufferMirror()
+    e.tap_exact("ㄋ")  # digits "7", tokens {0: ㄋ}
+    e.tap_digit("6")   # digits "76"
+    e.tap_tone("x")
+    e.tap_exact("ㄏ")  # digits "768", tokens {0: ㄋ, 2: ㄏ}
+    e.tap_digit("8")   # digits "7688"
+    e.tap_tone("x")
+
+    e.select("你", coverage=2)
+    assert e.tokens == {0: "ㄏ"}  # ㄏ shifted from position 2 to 0
+    assert e.digits == "88"
+    print("partial_commit_shifts_exact_tokens OK")
+
+
+def test_backspace_uncommits_partial_selection():
+    """Backspace past the start of the remainder un-commits the last partial selection:
+    the chunk's digits/tones/tokens return to the buffer and its text must be deleted."""
+    e = EngineBufferMirror()
+    for d in "76":
+        e.tap_digit(d)
+    e.tap_tone("x")
+    for d in "88":
+        e.tap_digit(d)
+    e.tap_tone("x")
+    e.select("你", coverage=2)
+    assert e.digits == "88"
+
+    assert e.backspace() is None  # pops 好's tone mark
+    assert e.backspace() is None  # digit 8 -> 8
+    assert e.backspace() is None  # digit 8 -> ""
+    assert e.backspace() == "你"  # chunk un-committed: caller deletes 你 from the document
+    assert e.digits == "76"  # consumed digits restored
+    assert e.marks == [(2, "x")]  # and the tone mark that belonged to them
+    print("backspace_uncommits_partial_selection OK")
+
+
+def test_uncommit_restores_pre_run_context():
+    """Un-committing the whole run restores the pre-run `lastCommitted` bigram context."""
+    e = EngineBufferMirror()
+    e.select("早安")  # a full commit before the run starts
+    assert e.last_committed == "早安"
+
+    # type 你好嗎 in one go, then commit it word by word
+    for d in "76":
+        e.tap_digit(d)
+    e.tap_tone("x")
+    for d in "88":
+        e.tap_digit(d)
+    e.tap_tone("x")
+    for d in "71":
+        e.tap_digit(d)
+    e.tap_tone("q")
+    e.select("你", coverage=2)  # run chunk 1; remainder "8871"
+    e.select("好", coverage=2)  # run chunk 2; 嗎's "71" survives
+    assert e.digits == "71"
+    assert e.last_committed == "好"
+
+    while e.digits or e.marks:
+        assert e.backspace() is None
+    assert e.backspace() == "好"
+    assert e.last_committed == "你"
+    while e.digits or e.marks:
+        assert e.backspace() is None
+    assert e.backspace() == "你"
+    assert e.chunks == []
+    assert e.last_committed == "早安"  # pre-run context restored
+    print("uncommit_restores_pre_run_context OK")
+
+
+def test_prediction_select_ends_run():
+    """A next-word prediction selected mid-run commits it and ends the run (full clear)."""
+    e = EngineBufferMirror()
+    for d in "76":
+        e.tap_digit(d)
+    e.tap_tone("x")
+    for d in "88":
+        e.tap_digit(d)
+    e.tap_tone("x")
+    e.select("你", coverage=2)
+    while e.digits or e.marks:
+        e.backspace()  # user deleted all remaining input; run still holds 你
+    assert e.preedit() == "你"
+    assert e.is_composing()
+
+    e.select("好嗎", is_prediction=True)
+    assert e.chunks == [] and e.digits == ""
+    assert e.preedit() == ""
+    print("prediction_select_ends_run OK")
+
+
+def test_preedit_shows_committed_and_remainder():
+    """Preedit = committed run text + raw keys still composing (「你·ㄏㄒㄠㄡ」 style)."""
+    e = EngineBufferMirror()
+    for d in "76":
+        e.tap_digit(d)
+    e.tap_tone("x")
+    for d in "88":
+        e.tap_digit(d)
+    e.tap_tone("x")
+    assert e.preedit() == "ㄇㄋㄜ·ㄔㄘㄣㄧ·ㄏㄒㄠㄡ·ㄏㄒㄠㄡ"  # plain run: keys only
+
+    e.select("你", coverage=2)
+    assert e.preedit() == "你·ㄏㄒㄠㄡ·ㄏㄒㄠㄡ"  # committed head + remaining keys
+    print("preedit_shows_committed_and_remainder OK")
+
+
 def main() -> int:
     test_encode_samples()
     test_dict_contains_targets()
@@ -601,6 +855,12 @@ def main() -> int:
     test_chi_reachable_with_tone()
     test_xiang_yixia_long_input()
     test_span_pretrim_matches_full_sort()
+    test_partial_commit_keeps_remainder()
+    test_partial_commit_shifts_exact_tokens()
+    test_backspace_uncommits_partial_selection()
+    test_uncommit_restores_pre_run_context()
+    test_prediction_select_ends_run()
+    test_preedit_shows_committed_and_remainder()
     print("ALL PASSED")
     return 0
 

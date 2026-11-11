@@ -7,6 +7,7 @@ Custom `zhuyin_phone` UI + pure Swift T9 matcher:
 - `SyllableCodec` — zhuyin (bopomofo) syllable → T9 digits/tone, via `T9KeyMap`
 - `DictionaryLoader` — loads `Resources/chewing/*.dict.yaml` into an in-memory prefix-indexed lexicon
 - `T9SortFilter` — coverage/tone-anchor ranking (ported from Hamster's `rime.lua` `t9_sort_filter`)
+- `InputEngine` — continuous-input selection: candidates carry the number of composing digits they consume (`Candidate.coverage`); a partial-span selection commits its span, keeps the remainder composing (tones / long-pressed tokens shift with it), and backspace can un-commit chunks back into the buffer
 - `UserLexicon` — per-user word frequency + bigram, boosts ranking, backed by App Group `UserDefaults` + optional iCloud KVS sync
 
 ## Data

@@ -64,6 +64,8 @@ final class KeyboardViewController: UIInputViewController {
             }
             let text = self.engine.selectCandidate(candidate)
             self.textDocumentProxy.insertText(text)
+            // Partial commits stay composing, so the space key keeps its tone-1 label.
+            self.zhuyinKeyboard?.updateSpaceKey(isComposing: self.engine.isComposing)
             self.collapseCandidates()
             self.refreshPredictionsAfterCommit(inserted: text)
         }
@@ -171,6 +173,7 @@ final class KeyboardViewController: UIInputViewController {
         candidateBar.setCandidates(
             barItems,
             preedit: engine.preeditDisplay,
+            preeditCommitted: engine.preeditCommitted,
             status: engine.isComposing ? "" : engine.predictionStatus
         )
         if candidatesExpanded {
@@ -235,6 +238,7 @@ final class KeyboardViewController: UIInputViewController {
                 guard let self else { return }
                 let text = self.engine.selectCandidate(candidate)
                 self.textDocumentProxy.insertText(text)
+                self.zhuyinKeyboard?.updateSpaceKey(isComposing: self.engine.isComposing)
                 self.collapseCandidates()
                 self.refreshPredictionsAfterCommit(inserted: text)
             }
@@ -385,8 +389,10 @@ final class KeyboardViewController: UIInputViewController {
         case .backspace:
             if !engine.isComposing {
                 textDocumentProxy.deleteBackward()
-            } else {
-                engine.backspace()
+            } else if let uncommitted = engine.backspace() {
+                // Backspace un-committed a partial selection: its text is already in the
+                // document, so delete those characters; the buffer slice was restored.
+                uncommitted.forEach { _ in textDocumentProxy.deleteBackward() }
             }
         case .numberPad:
             mode = .symbols

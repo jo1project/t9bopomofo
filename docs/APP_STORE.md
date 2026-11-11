@@ -162,3 +162,4 @@ The app collects no data, has no accounts, ads, analytics or in-app purchases.
 | 1.0.2 | 94 | feat/1.0.2（iPhone-only、字體、mmap 詞庫） | 已上架 |
 | 1.0.3 | 95 | main（PR #11 淯／Gemini 模型、PR #12 升版號 merge） | 已上架 |
 | 1.0.4 | 96 | feat/haptics-sounds-and-expand-fix（展開候選防閃退、按鍵音效與震動強化） | TestFlight |
+| 1.0.5 | 97 | feat/partial-candidate-selection（連續輸入選詞：部分提交保留剩餘輸入、退格反提交、組字顯示） | TestFlight |

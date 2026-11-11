@@ -21,6 +21,22 @@ final class InputEngine: ObservableObject {
     /// Zhuyin symbol the user long-pressed at each composing-digit position (e.g. ㄅ rather than
     /// ㄉ/ㄚ on key 1). Candidates that read differently at that position are dropped.
     private var exactTokens: [Int: Character] = [:]
+    /// One chunk committed by partial selection during the current composition run: the text
+    /// sent to the document plus the buffer slice (digits / tone marks / exact tokens) it
+    /// consumed. Kept so `backspace()` can un-commit once the user deletes past the start of
+    /// the remaining input — the consumed buffer comes back and the caller deletes the text.
+    private struct CommittedChunk {
+        let text: String
+        let digits: String
+        let toneMarks: [(digits: Int, tone: Character)]
+        let exactTokens: [Int: Character]
+    }
+    /// Chunks committed so far in the current run (front → back). Non-empty means the user is
+    /// mid-run on continuous input: text is already in the document, digits may still be typing.
+    private var committedChunks: [CommittedChunk] = []
+    /// `lastCommitted` as it was before this run's first partial selection, so un-committing
+    /// back to zero chunks restores the pre-run bigram context.
+    private var runBaseCommitted = ""
     /// The bar's 12. It started at 40, but every commit's collapse reset it to 12; the expanded
     /// panel raises it to 240 so rare chars still appear there without exceeding keyboard memory limits.
     private var candidateLimit = 12
@@ -68,8 +84,12 @@ final class InputEngine: ObservableObject {
     }
 
     var isComposing: Bool {
-        !composingDigits.isEmpty || !composingTones.isEmpty
+        !composingDigits.isEmpty || !composingTones.isEmpty || !committedChunks.isEmpty
     }
+
+    /// Text already committed during this composition run (concatenation of the partial
+    /// selections). Shown as the head of the preedit so the user sees what has been sent.
+    var preeditCommitted: String { committedChunks.map(\.text).joined() }
 
     func tapT9Key(_ key: Character) {
         composingDigits.append(key)
@@ -95,15 +115,32 @@ final class InputEngine: ObservableObject {
         refreshSwiftCandidates()
     }
 
-    func backspace() {
+    /// Pops a tone mark, then a composing digit. Once both are exhausted, un-commits the last
+    /// partial selection instead: the digits/tones/tokens it consumed return to the buffer.
+    /// - Returns: the document text the caller must delete when a chunk was un-committed (its
+    ///   text is already in the document), nil when the engine handled the backspace internally.
+    @discardableResult
+    func backspace() -> String? {
+        var uncommitted: String?
         if !toneMarks.isEmpty {
             toneMarks.removeLast()
             composingTones = String(toneMarks.map(\.tone))
         } else if !composingDigits.isEmpty {
             composingDigits.removeLast()
             exactTokens[composingDigits.count] = nil
+        } else if let chunk = committedChunks.popLast() {
+            // Backspace walked back past the start of the remaining input: give the chunk's
+            // buffer back (positions are still valid — everything after it was deleted first).
+            composingDigits = chunk.digits + composingDigits
+            toneMarks = chunk.toneMarks + toneMarks
+            composingTones = String(toneMarks.map(\.tone))
+            for (pos, zh) in chunk.exactTokens { exactTokens[pos] = zh }
+            lastCommitted = committedChunks.last?.text ?? runBaseCommitted
+            if committedChunks.isEmpty { runBaseCommitted = "" }
+            uncommitted = chunk.text
         }
         refreshSwiftCandidates()
+        return uncommitted
     }
 
     func clearComposing() {
@@ -111,6 +148,8 @@ final class InputEngine: ObservableObject {
         composingTones = ""
         toneMarks = []
         exactTokens = [:]
+        committedChunks = []
+        runBaseCommitted = ""
         candidates = []
         preeditDisplay = ""
     }
@@ -121,7 +160,54 @@ final class InputEngine: ObservableObject {
             || candidate.id.hasPrefix("pred-") || candidate.id.hasPrefix("llm-") {
             return commitSuggestion(candidate.text)
         }
+        // Partial-span candidate during continuous input: commit just its span and keep the
+        // unconsumed digits composing, so word-by-word selection survives long runs.
+        if candidate.coverage > 0, candidate.coverage < composingDigits.count {
+            return commitPartial(candidate)
+        }
         return commitSuggestion(candidate.text)
+    }
+
+    /// Commits a candidate that covers only the first `coverage` digits of the buffer: the
+    /// remainder stays composing and re-ranks. Tone marks pressed at ≤ coverage digits (they
+    /// anchored a consumed syllable) go with the chunk; the rest shift down by `coverage`.
+    /// Long-pressed exact tokens below the boundary shift the same way.
+    private func commitPartial(_ candidate: Candidate) -> String {
+        let coverage = candidate.coverage
+        let consumedDigits = String(composingDigits.prefix(coverage))
+
+        var consumedMarks: [(digits: Int, tone: Character)] = []
+        var keptMarks: [(digits: Int, tone: Character)] = []
+        for mark in toneMarks {
+            if mark.digits <= coverage {
+                consumedMarks.append(mark)
+            } else {
+                keptMarks.append((digits: mark.digits - coverage, tone: mark.tone))
+            }
+        }
+        var consumedTokens: [Int: Character] = [:]
+        var keptTokens: [Int: Character] = [:]
+        for (pos, zh) in exactTokens {
+            if pos < coverage { consumedTokens[pos] = zh } else { keptTokens[pos - coverage] = zh }
+        }
+
+        committedChunks.append(CommittedChunk(
+            text: candidate.text,
+            digits: consumedDigits,
+            toneMarks: consumedMarks,
+            exactTokens: consumedTokens
+        ))
+        if committedChunks.count == 1 { runBaseCommitted = lastCommitted }
+
+        composingDigits = String(composingDigits.dropFirst(coverage))
+        toneMarks = keptMarks
+        composingTones = String(toneMarks.map(\.tone))
+        exactTokens = keptTokens
+
+        userLexicon.recordCommit(candidate.text, previous: lastCommitted.isEmpty ? nil : lastCommitted)
+        lastCommitted = candidate.text
+        refreshSwiftCandidates()
+        return candidate.text
     }
 
     /// Writes pending user-dictionary changes; the keyboard is going away.
@@ -241,11 +327,17 @@ final class InputEngine: ObservableObject {
         // Runs on every exit path (including the early-return for empty composing digits) so
         // callers always get the UI to refresh after this call.
         defer { onCandidatesChanged?() }
-        preeditDisplay = composingDigits.isEmpty
+        // Preedit = text already committed this run (bold head in the bar) + the raw keys still
+        // composing after it (e.g. 「你·ㄏㄒㄠㄡ」 after selecting 你 mid-run).
+        let committedPrefix = preeditCommitted
+        let remainderKeys = composingDigits.isEmpty
             ? ""
             : composingDigits.enumerated()
                 .map { i, d in exactTokens[i].map { String($0) } ?? T9KeyMap.keyLabels[d] ?? String(d) }
                 .joined(separator: "·")
+        preeditDisplay = committedPrefix.isEmpty
+            ? remainderKeys
+            : (remainderKeys.isEmpty ? committedPrefix : committedPrefix + "·" + remainderKeys)
 
         guard !composingDigits.isEmpty else {
             if !lastCommitted.isEmpty {
@@ -308,7 +400,8 @@ final class InputEngine: ObservableObject {
                     text: phrase.word,
                     reading: phrase.reading,
                     score: Double(phrase.weight) + 500 + toneBonus + userBoost,
-                    source: .exact
+                    source: .exact,
+                    coverage: digits.count
                 ),
                 coverage: digits.count,
                 fullCoverage: true,
@@ -337,7 +430,8 @@ final class InputEngine: ObservableObject {
                     text: path.text,
                     reading: path.reading,
                     score: Double(path.weight) + toneBonus + userBoost - segPenalty,
-                    source: .exact
+                    source: .exact,
+                    coverage: digits.count
                 ),
                 coverage: digits.count,
                 fullCoverage: true,
@@ -351,7 +445,8 @@ final class InputEngine: ObservableObject {
                         text: first.word,
                         reading: first.reading,
                         score: Double(first.weight) + toneScore(tones: first.tones, syllableLengths: first.syllableLengths) + userLexicon.boost(for: first.word, previous: prev),
-                        source: .exact
+                        source: .exact,
+                        coverage: first.t9.count
                     ),
                     coverage: first.t9.count,
                     fullCoverage: false,
@@ -371,7 +466,8 @@ final class InputEngine: ObservableObject {
                         text: m.entry.word,
                         reading: m.entry.reading,
                         score: Double(m.entry.weight) * 0.45 + toneBonus + userBoost - Double(m.distance) * 300,
-                        source: m.kind
+                        source: m.kind,
+                        coverage: m.entry.t9.count
                     ),
                     coverage: m.entry.t9.count,
                     fullCoverage: m.entry.t9.count == digits.count && m.distance == 0,
@@ -392,7 +488,8 @@ final class InputEngine: ObservableObject {
                 text: e.word,
                 reading: e.reading,
                 score: score,
-                source: .exact
+                source: .exact,
+                coverage: coverage
             ),
             coverage: coverage,
             fullCoverage: coverage == digits.count,

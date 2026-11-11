@@ -145,11 +145,29 @@ final class CandidateBarView: UIView {
         expandButton.setTitle(expanded ? "▲" : "▼", for: .normal)
     }
 
-    func setCandidates(_ items: [Candidate], preedit: String, status: String = "") {
+    func setCandidates(_ items: [Candidate], preedit: String, preeditCommitted: String = "", status: String = "") {
         let dark = traitCollection.userInterfaceStyle == .dark
         if !preedit.isEmpty {
-            preeditLabel.text = preedit
-            preeditLabel.textColor = dark ? UIColor(white: 0.92, alpha: 1) : UIColor(white: 0.12, alpha: 1)
+            // Composing preedit: text already committed this run (partial selections) is
+            // semibold; the raw keys still composing after it are regular and dimmer.
+            let committedAttrs: [NSAttributedString.Key: Any] = [
+                .font: UIFont.systemFont(ofSize: 13, weight: .semibold),
+                .foregroundColor: dark ? UIColor(white: 0.92, alpha: 1) : UIColor(white: 0.12, alpha: 1),
+            ]
+            let keysAttrs: [NSAttributedString.Key: Any] = [
+                .font: UIFont.systemFont(ofSize: 12, weight: .medium),
+                .foregroundColor: dark ? UIColor(white: 0.72, alpha: 1) : UIColor(white: 0.40, alpha: 1),
+            ]
+            if !preeditCommitted.isEmpty, preedit.hasPrefix(preeditCommitted) {
+                let attr = NSMutableAttributedString(string: preeditCommitted, attributes: committedAttrs)
+                attr.append(NSAttributedString(
+                    string: String(preedit.dropFirst(preeditCommitted.count)),
+                    attributes: keysAttrs
+                ))
+                preeditLabel.attributedText = attr
+            } else {
+                preeditLabel.attributedText = NSAttributedString(string: preedit, attributes: keysAttrs)
+            }
             preeditMaxWidth?.constant = 88
         } else if !status.isEmpty {
             preeditLabel.text = status

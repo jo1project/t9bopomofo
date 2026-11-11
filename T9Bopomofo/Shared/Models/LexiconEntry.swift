@@ -22,6 +22,19 @@ struct Candidate: Identifiable, Hashable, Sendable {
     let reading: String
     let score: Double
     let source: Source
+    /// How many leading composing digits this candidate consumes when selected.
+    /// 0 = not a composing-span candidate (next-word predictions, LLM, English spell
+    /// suggestions), which never appear while composing.
+    let coverage: Int
+
+    init(id: String, text: String, reading: String, score: Double, source: Source, coverage: Int = 0) {
+        self.id = id
+        self.text = text
+        self.reading = reading
+        self.score = score
+        self.source = source
+        self.coverage = coverage
+    }
 
     enum Source: String, Sendable {
         case exact
