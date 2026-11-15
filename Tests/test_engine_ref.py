@@ -651,10 +651,17 @@ def test_xiang_yixia_long_input():
 
 
 def t9_sort(items, digits_count, tones=""):
-    """Mirrors T9SortFilter.sort (items: (text, coverage, score), pre-sorted by score desc)."""
+    """Mirrors T9SortFilter.sort (items: (text, coverage, score[, userBoost]), pre-sorted by
+    score desc). Learned partial spans (userBoost > 0) leave the coverage round-robin and are
+    emitted right after the full-coverage group, capped at 6 distinct texts."""
     stream = "x" * digits_count + tones
-    full, buckets, orphans, partials = [], {}, [], 0
-    for text, cov, score in items:
+    full, buckets, orphans, learned, partials = [], {}, [], [], 0
+    for item in items:
+        text, cov, score = item[0], item[1], item[2]
+        boost = item[3] if len(item) > 3 else 0.0
+        if cov != digits_count and boost > 0:
+            learned.append((score, text))
+            continue
         if cov != digits_count:
             partials += 1
             if partials > 80:
@@ -666,6 +673,14 @@ def t9_sort(items, digits_count, tones=""):
         else:
             buckets.setdefault(cov, []).append(text)
     ordered = list(full)
+    learned.sort(key=lambda t: -t[0])
+    seen: set[str] = set()
+    for score, text in learned:
+        if len(seen) >= 6:
+            break
+        if text not in seen:
+            seen.add(text)
+            ordered.append(text)
     for rnd in range(41):
         for cov in sorted(buckets, reverse=True):
             if rnd < len(buckets[cov]):
@@ -840,6 +855,82 @@ def test_preedit_shows_committed_and_remainder():
     print("preedit_shows_committed_and_remainder OK")
 
 
+def test_user_boost_promotes_picked_words():
+    """User-lexicon learning must be VISIBLE in the bar. Two parts:
+
+    - Formula: boost = 20,000·√freq + 30,000·√bigram (sqrt-tapered; one pick already
+      beats the 5,000-40,000 corpus gaps between same-bucket rivals).
+    - Structure: a partial span with history leaves the coverage round-robin — score only
+      reorders WITHIN a coverage bucket, so the old +4,000/pick was structurally invisible:
+      a picked 2-digit word stayed behind every longer span forever.
+    """
+    from math import sqrt
+
+    def boost(freq_count: float, bigram_count: float | None) -> float:
+        score = 20_000 * sqrt(freq_count) if freq_count else 0.0
+        if bigram_count:
+            score += 30_000 * sqrt(bigram_count)
+        return score
+
+    assert boost(1, None) == 20_000
+    assert boost(2, None) == 20_000 * sqrt(2)
+    assert boost(0, 1) == 30_000
+    # taper: 25 picks grow slower than linear would
+    assert boost(25, None) < boost(1, None) * 25
+
+    by_t9: dict[str, list] = {}
+    for word, reading, t9, weight in load_all():
+        by_t9.setdefault(t9, []).append((word, weight))
+
+    # 你(ㄋㄧˇ)=76  好(ㄏㄠˇ)=88  嗎(ㄇㄚ)=71 — retyping 你好嗎 = 768871, word-by-word.
+    # Spans are input PREFIXES: 你 is a span of the fresh input; after picking 你 the
+    # remainder "8871" spans 好/好嗎; after picking 好, 嗎 ("71") becomes full coverage.
+    digits = encode_reading("ㄋㄧˇ ㄏㄠˇ ㄇㄚ")
+    assert digits == "768871", digits
+    freq = {"你": 2, "好": 1, "嗎": 1, "好嗎": 1}   # picked word-by-word before (你 twice)
+    bigram = {("你", "好"): 1, ("好", "嗎"): 1}     # the pairings that follow from that
+
+    def build(items_digits: str, prev: str | None, with_boost: bool) -> list:
+        out = []
+        for n in range(1, len(items_digits) + 1):
+            for w, wt in by_t9.get(items_digits[:n], []):
+                b = 0.0
+                if with_boost:
+                    if w in freq:
+                        b += 20_000 * sqrt(freq[w])
+                    if prev and bigram.get((prev, w)):
+                        b += 30_000 * sqrt(bigram[(prev, w)])
+                out.append((w, n, float(wt) + b, b))
+        return sorted(out, key=lambda h: -h[2])
+
+    # Stage 1 — fresh run "768871", prev from the last session: 你 (freq 2) must come
+    # right after the full-coverage group instead of the tail of the round-robin.
+    learned = t9_sort(build(digits, None, True), len(digits))
+    full_texts = list(dict.fromkeys(w for w, n, _, _ in build(digits, None, True) if n == len(digits)))
+    assert learned[:len(full_texts)] == full_texts, learned[:len(full_texts)]
+    assert learned[len(full_texts)] == "你", learned[len(full_texts):len(full_texts) + 3]
+
+    # Stage 2 — 你 picked; remainder "8871" re-ranks with prev=你. 好 (freq+bigram
+    # = +50,000) must leave the round-robin: its raw weight (30,909) loses to 後
+    # (66,765) in the plain run, so history is what flips the bucket.
+    rest = digits[2:]
+    plain2 = t9_sort(build(rest, "你", False), len(rest))
+    learned2 = t9_sort(build(rest, "你", True), len(rest))
+    full_texts2 = list(dict.fromkeys(w for w, n, _, _ in build(rest, "你", True) if n == len(rest)))
+    assert learned2[len(full_texts2)] == "好", learned2[len(full_texts2):len(full_texts2) + 3]
+    assert plain2.index("好") > learned2.index("好"), (plain2[:8], learned2[:8])
+
+    # Stage 3 — 好 picked; remainder "71" makes 嗎 full coverage: no structural change
+    # needed, the bigram boost must lift it to the top of the full group (plain run:
+    # 哪/那 at 32,190 outrank 嗎 at 26,437).
+    rest3 = rest[2:]
+    plain3 = t9_sort(build(rest3, "好", False), len(rest3))
+    learned3 = t9_sort(build(rest3, "好", True), len(rest3))
+    assert learned3[0] == "嗎", learned3[:3]
+    assert plain3.index("嗎") > learned3.index("嗎"), (plain3[:5], learned3[:5])
+    print("user_boost_promotes_picked_words OK", learned[:4], "|", learned2[:4], "|", learned3[:3])
+
+
 def main() -> int:
     test_encode_samples()
     test_dict_contains_targets()
@@ -855,6 +946,7 @@ def main() -> int:
     test_chi_reachable_with_tone()
     test_xiang_yixia_long_input()
     test_span_pretrim_matches_full_sort()
+    test_user_boost_promotes_picked_words()
     test_partial_commit_keeps_remainder()
     test_partial_commit_shifts_exact_tokens()
     test_backspace_uncommits_partial_selection()

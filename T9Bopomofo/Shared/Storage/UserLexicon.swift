@@ -114,13 +114,16 @@ final class UserLexicon: @unchecked Sendable {
 
     func boost(for word: String, previous: String?) -> Double {
         // libchewing's raw frequency weights routinely differ by 5,000-40,000 between
-        // homophone competitors (e.g. 業 49775 vs 易 14785) — the old +50/+120-per-pick
-        // constants (tuned for the old, much flatter rime corpus) were noise against that
-        // gap, so a picked word never visibly moved up. Scaled to the same order of
-        // magnitude as toneScore's ±12,000/-18,000 so a few picks reliably win.
-        var score = Double(freq[word, default: 0]) * 4_000
+        // homophone competitors (e.g. 業 49775 vs 易 14785). The old linear +4,000-per-pick
+        // needed ~10 picks to close that gap, so a picked word never visibly moved up.
+        // The base is now sized so ONE pick (+20,000) wins most same-bucket gaps, and
+        // sqrt makes growth taper: linear only overtakes it after ~25 picks, so heavy
+        // use can't inflate a word past everything in the corpus. bigram counts 1.5x
+        // freq — "I typed this word right after that one" is stronger evidence than raw
+        // frequency. ponytail: constants are tuned, not derived — revisit if mis-ranks show up.
+        var score = 20_000 * sqrt(Double(freq[word, default: 0]))
         if let previous, let count = next[previous]?[word] {
-            score += Double(count) * 8_000
+            score += 30_000 * sqrt(Double(count))
         }
         return score
     }

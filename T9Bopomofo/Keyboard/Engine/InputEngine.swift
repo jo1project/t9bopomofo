@@ -361,18 +361,21 @@ final class InputEngine: ObservableObject {
         // full-coverage items are listed by score with repeated texts dropped, so nothing past
         // the first `candidateLimit` distinct full texts survives. Same output, far fewer
         // string-building allocations per keystroke.
-        var fullHits: [(entry: LexiconEntry, score: Double)] = []
-        var partialHits: [(entry: LexiconEntry, coverage: Int, score: Double)] = []
+        var fullHits: [(entry: LexiconEntry, score: Double, boost: Double)] = []
+        var partialHits: [(entry: LexiconEntry, coverage: Int, score: Double, boost: Double)] = []
         for (span, entries) in lexicon.prefixSpans(of: digits) {
             let coverage = span.utf8.count
             for e in entries where !violatesExactTokens(e.reading) {
+                // Boost is kept separate from the total score: T9SortFilter uses it to
+                // promote learned partial spans past the coverage round-robin.
+                let boost = userLexicon.boost(for: e.word, previous: prev)
                 let score = Double(e.weight)
                     + toneScore(tones: e.tones, syllableLengths: e.syllableLengths)
-                    + userLexicon.boost(for: e.word, previous: prev)
+                    + boost
                 if coverage == digits.utf8.count {
-                    fullHits.append((e, score))
+                    fullHits.append((e, score, boost))
                 } else {
-                    partialHits.append((e, coverage, score))
+                    partialHits.append((e, coverage, score, boost))
                 }
             }
         }
@@ -383,11 +386,11 @@ final class InputEngine: ObservableObject {
                 guard fullTexts.count < candidateLimit else { break }
                 fullTexts.insert(hit.entry.word)
             }
-            items.append(spanItem(hit.entry, coverage: digits.count, score: hit.score, digits: digits))
+            items.append(spanItem(hit.entry, coverage: digits.count, score: hit.score, digits: digits, userBoost: hit.boost))
         }
         partialHits.sort { $0.score > $1.score }
         for hit in partialHits.prefix(80) {
-            items.append(spanItem(hit.entry, coverage: hit.coverage, score: hit.score, digits: digits))
+            items.append(spanItem(hit.entry, coverage: hit.coverage, score: hit.score, digits: digits, userBoost: hit.boost))
         }
 
         if let phrase = PhraseSegmenter.bestPhrase(digits: digits, lexicon: lexicon),
@@ -405,7 +408,8 @@ final class InputEngine: ObservableObject {
                 ),
                 coverage: digits.count,
                 fullCoverage: true,
-                orphanTone: false
+                orphanTone: false,
+                userBoost: userBoost
             ))
         }
 
@@ -416,7 +420,6 @@ final class InputEngine: ObservableObject {
         }
         for (pi, path) in paths.enumerated() {
             let toneBonus = toneScore(tones: path.tones, syllableLengths: path.syllableLengths)
-            let userBoost = userLexicon.boost(for: path.text, previous: prev)
             // Proportional (not flat) penalty: libchewing single-char weights can be ~10x a real
             // phrase's weight, so a flat penalty is swamped and a chop of two common chars
             // (e.g. 但+試) out-ranks the real phrase (但是). Scale the penalty to the path's own
@@ -424,33 +427,37 @@ final class InputEngine: ObservableObject {
             // ponytail: 0.75 is a tuned constant, not a language model — revisit if mis-ranks show up.
             let segCount = Double(max(0, path.count - 1))
             let segPenalty = Double(path.weight) * segCount * 0.75
+            let pathBoost = userLexicon.boost(for: path.text, previous: prev)
             let pathItem = T9SortFilter.Item(
                 candidate: Candidate(
                     id: "seg-\(pi)-\(path.text)",
                     text: path.text,
                     reading: path.reading,
-                    score: Double(path.weight) + toneBonus + userBoost - segPenalty,
+                    score: Double(path.weight) + toneBonus + pathBoost - segPenalty,
                     source: .exact,
                     coverage: digits.count
                 ),
                 coverage: digits.count,
                 fullCoverage: true,
-                orphanTone: false
+                orphanTone: false,
+                userBoost: pathBoost
             )
             if !violatesExactTokens(path.reading) { items.append(pathItem) }
             if path.count > 1, let first = path.entries.first, !violatesExactTokens(first.reading) {
+                let firstBoost = userLexicon.boost(for: first.word, previous: prev)
                 items.append(T9SortFilter.Item(
                     candidate: Candidate(
                         id: "seg1-\(pi)-\(first.word)",
                         text: first.word,
                         reading: first.reading,
-                        score: Double(first.weight) + toneScore(tones: first.tones, syllableLengths: first.syllableLengths) + userLexicon.boost(for: first.word, previous: prev),
+                        score: Double(first.weight) + toneScore(tones: first.tones, syllableLengths: first.syllableLengths) + firstBoost,
                         source: .exact,
                         coverage: first.t9.count
                     ),
                     coverage: first.t9.count,
                     fullCoverage: false,
-                    orphanTone: false
+                    orphanTone: false,
+                    userBoost: firstBoost
                 ))
             }
         }
@@ -471,7 +478,8 @@ final class InputEngine: ObservableObject {
                     ),
                     coverage: m.entry.t9.count,
                     fullCoverage: m.entry.t9.count == digits.count && m.distance == 0,
-                    orphanTone: false
+                    orphanTone: false,
+                    userBoost: userBoost
                 ))
             }
         }
@@ -481,7 +489,7 @@ final class InputEngine: ObservableObject {
         candidates = Array(sorted.prefix(candidateLimit))
     }
 
-    private func spanItem(_ e: LexiconEntry, coverage: Int, score: Double, digits: String) -> T9SortFilter.Item {
+    private func spanItem(_ e: LexiconEntry, coverage: Int, score: Double, digits: String, userBoost: Double) -> T9SortFilter.Item {
         T9SortFilter.Item(
             candidate: Candidate(
                 id: "span-\(digits.prefix(coverage))-\(e.word)-\(e.reading)",
@@ -493,7 +501,8 @@ final class InputEngine: ObservableObject {
             ),
             coverage: coverage,
             fullCoverage: coverage == digits.count,
-            orphanTone: false
+            orphanTone: false,
+            userBoost: userBoost
         )
     }
 

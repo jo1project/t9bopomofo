@@ -2,11 +2,12 @@ import Foundation
 
 /// Port of Hamster / rime-bopomofo-t9 `rime.lua` `t9_sort_filter` (v16).
 ///
-/// Ranking goals (same as upstream):
+/// Ranking goals (same as upstream, plus learned candidates):
 /// 1. Full-coverage candidates first (whole phrase / sentence)
-/// 2. If a tone anchors the first syllable, promote that syllable's best char
-/// 3. Round-robin partial spans by coverage length (long→short each round)
-/// 4. Orphan-tone breaks last (断在声调键前的无效断词)
+/// 2. Learned partial spans (user-lexicon boosted) right after them, score-ordered
+/// 3. If a tone anchors the first syllable, promote that syllable's best char
+/// 4. Round-robin partial spans by coverage length (long→short each round)
+/// 5. Orphan-tone breaks last (断在声调键前的无效断词)
 enum T9SortFilter {
     struct Item {
         var candidate: Candidate
@@ -16,6 +17,12 @@ enum T9SortFilter {
         var fullCoverage: Bool
         /// True if the next input char after this span is a tone key (invalid break).
         var orphanTone: Bool
+        /// UserLexicon boost (freq + bigram, sqrt-scaled) already inside `candidate.score`.
+        /// > 0 marks a learned candidate: a partial span the user picked before leaves the
+        /// coverage buckets and is emitted right after the full-coverage group — score can
+        /// only reorder WITHIN a bucket, so without this a boosted short span stays locked
+        /// behind every longer span no matter how often it was picked.
+        var userBoost: Double = 0
     }
 
     private static let toneKeys: Set<Character> = ["q", "w", "x", "y"]
@@ -34,6 +41,7 @@ enum T9SortFilter {
         let input = Array(inputDigitsAndTones)
 
         var full: [Item] = []
+        var learned: [Item] = []
         var buckets: [Int: [Item]] = [:]
         var orphans: [Item] = []
         var maxCov = 0
@@ -42,6 +50,14 @@ enum T9SortFilter {
         for var item in items {
             let cov = item.coverage
             item.fullCoverage = cov == digitsCount
+            // A partial span the user picked before jumps the round-robin entirely: they
+            // are retyping this input because of that word, so history outranks the
+            // structural coverage order (and its orphan-tone status — explicit past
+            // picks beat the invalid-break heuristic).
+            if !item.fullCoverage, item.userBoost > 0 {
+                learned.append(item)
+                continue
+            }
             // Only the top 80 partial spans are ranked; full-coverage items are never cut. They
             // used to be: on long input a segmented phrase (想一下) scores below common single
             // chars, fell outside the top 80, and only partial spans (想要, 享有) were shown.
@@ -76,6 +92,17 @@ enum T9SortFilter {
 
         var ordered: [Candidate] = []
         ordered.append(contentsOf: full.map(\.candidate))
+        // Learned partial spans, best first. Capped and text-deduped so a heavy history
+        // can't fill the whole bar and crowd out fresh (never-picked) candidates.
+        var learnedSeen = Set<String>()
+        var learnedEmitted = 0
+        for item in learned.sorted({ $0.candidate.score > $1.candidate.score }) {
+            guard learnedEmitted < 6 else { break }
+            if learnedSeen.insert(item.candidate.text).inserted {
+                ordered.append(item.candidate)
+                learnedEmitted += 1
+            }
+        }
         if let promoted {
             ordered.append(promoted.candidate)
         }
