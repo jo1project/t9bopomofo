@@ -1,4 +1,4 @@
-﻿name: T9Bopomofo
+name: T9Bopomofo
 options:
   bundleIdPrefix: com.jo1project
   deploymentTarget:
@@ -82,7 +82,7 @@ targets:
               "$SRCROOT/Scripts/generate_lexicon_main.swift" > "$GEN_SRC"
 
           # This target's build environment sets SDKROOT to the iOS SDK, but we're
-          # compiling a tool to run on the Mac build host right here ??override it
+          # compiling a tool to run on the Mac build host right here — override it
           # explicitly or swiftc tries to load the macOS stdlib from the iOS SDK path.
           MACOS_SDK="$(xcrun --sdk macosx --show-sdk-path)"
           swiftc -sdk "$MACOS_SDK" -O "$GEN_SRC" -o "$GEN_BIN"
@@ -110,7 +110,7 @@ targets:
     info:
       path: T9Bopomofo/Keyboard/Info.plist
       properties:
-        CFBundleDisplayName: Jo銝?9瘜券
+        CFBundleDisplayName: Jo一個T9注音
         NSExtension:
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).KeyboardViewController
           NSExtensionPointIdentifier: com.apple.keyboard-service
