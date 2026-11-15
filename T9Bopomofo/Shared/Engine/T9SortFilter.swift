@@ -96,7 +96,7 @@ enum T9SortFilter {
         // can't fill the whole bar and crowd out fresh (never-picked) candidates.
         var learnedSeen = Set<String>()
         var learnedEmitted = 0
-        for item in learned.sorted({ $0.candidate.score > $1.candidate.score }) {
+        for item in learned.sorted(by: { $0.candidate.score > $1.candidate.score }) {
             guard learnedEmitted < 6 else { break }
             if learnedSeen.insert(item.candidate.text).inserted {
                 ordered.append(item.candidate)
